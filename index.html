@@ -1,0 +1,178 @@
+<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name=theme-color content="#0c1118"><link rel=manifest href=manifest.webmanifest><link rel=icon href=icon-192.png>
+<title>Amarok Scan</title><style>
+:root{--bg:#0c1118;--pn:#151e2a;--ln:#26364a;--ink:#e3ebf1;--dim:#8296a8;--am:#ffb347;--ok:#5fd38d;--bad:#ff5d4d}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--ink);font:15px/1.35 system-ui,sans-serif;padding:env(safe-area-inset-top) 0 calc(66px + env(safe-area-inset-bottom));min-height:100dvh}
+.n,b{font-family:"Roboto Condensed","Arial Narrow",sans-serif-condensed,sans-serif;font-variant-numeric:tabular-nums}
+header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--ln)}
+h1{font-size:17px}h1 small{display:block;font-weight:400;color:var(--dim);font-size:12px}
+button{font:inherit;color:var(--ink);background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:10px 14px;min-height:44px}
+button.p{background:var(--am);color:#1b1200;border-color:var(--am);font-weight:700}button.d{border-color:var(--bad);color:var(--bad)}
+.chip{border-radius:99px}.chip i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--dim);margin-right:8px}.chip.on i{background:var(--ok)}
+main{padding:12px}section{display:none}section.on{display:block}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}.dim{color:var(--dim);font-size:13px}
+.g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.t,.c{background:var(--pn);border:1px solid var(--ln);border-radius:12px;padding:8px 10px}.c{margin-bottom:8px;padding:12px}
+.t b{display:block;font-size:27px;font-weight:600;line-height:1.1}.t span{color:var(--dim);font-size:12px}
+.t.w b{color:var(--am)}.t.x{border-color:var(--bad)}.t.x b{color:var(--bad)}.t.na{opacity:.3}
+.gg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.gg>div{position:relative}.gg svg{width:100%;display:block}
+.gg .v{position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding-top:8px}.gg .v b{font-size:44px;font-weight:600}.gg .v span{color:var(--dim);font-size:12px}
+.tr,.ar{fill:none;stroke-width:9;stroke-linecap:round;transform:rotate(135deg);transform-origin:50px 50px}.tr{stroke:var(--ln);stroke-dasharray:188.5 400}.ar{stroke:var(--am);stroke-dasharray:0 400;transition:stroke-dasharray .25s}
+nav{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--pn);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom)}
+nav button{border:0;border-radius:0;background:none;color:var(--dim);min-height:60px}nav button.on{color:var(--am);font-weight:700}
+.c h3{font-size:15px;margin-bottom:2px}.bad{color:var(--bad)}.warn{color:var(--am)}.ok{color:var(--ok)}
+.c svg{width:100%;height:28px;color:var(--am)}.sp{display:flex;justify-content:space-between;align-items:center;gap:10px}.sp>div{min-width:0}.sp svg{width:110px;flex:none}
+dialog{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-radius:16px;padding:16px;width:min(92vw,380px)}dialog::backdrop{background:#000a}dialog .row{margin:12px 0 0}
+#ts{position:fixed;left:12px;right:12px;bottom:78px;background:#243244;border-radius:10px;padding:10px 14px;display:none;z-index:9}
+</style></head><body>
+<header><h1>Amarok V6 scan<small id=sub>Not connected</small></h1><button class=chip id=cb><i></i><span>Connect</span></button></header>
+<main>
+<section id=live class=on>
+<div class=gg>
+<div><svg viewBox="0 0 100 100"><circle class=tr r=40 cx=50 cy=50 /><circle class=ar id=aS r=40 cx=50 cy=50 /></svg><div class="v n"><b id=vS>–</b><span>km/h</span></div></div>
+<div><svg viewBox="0 0 100 100"><circle class=tr r=40 cx=50 cy=50 /><circle class=ar id=aR r=40 cx=50 cy=50 /></svg><div class="v n"><b id=vR>–</b><span>rpm</span></div></div>
+</div>
+<div id=tiles class=g></div>
+<div class=row style="margin-top:12px"><button class=p id=rb>Start recording</button><span class=n id=rt></span></div>
+<p class=dim>Recording logs every sensor once a second with GPS position. Keep the app open while driving; the screen stays awake.</p>
+</section>
+<section id=faults>
+<div class=row><button class=p id=f1>Read codes</button><button id=f2>Scan all modules</button><button class=d id=f3>Clear codes</button></div>
+<div id=fl><p class=dim>Connect an adapter, then read codes. Each scan is saved so new faults can be spotted.</p></div>
+</section>
+<section id=trips><div class=row><button id=ex>Back up all trips</button></div><div id=tl></div></section>
+<section id=health><div id=hl></div></section>
+</main>
+<nav><button data-t=live class=on>Live</button><button data-t=faults>Faults</button><button data-t=trips>Trips</button><button data-t=health>Health</button></nav>
+<dialog id=cd><h1>Scanner</h1><p class=dim style="margin-top:6px">Use a Bluetooth LE OBD adapter (vLinker, OBDLink CX, Vgate iCar Pro BLE) plugged into the OBD port with the ignition on.</p>
+<div class=row><button class=p id=bc>Connect Bluetooth adapter</button><button id=bd>Demo drive</button><button id=bi style=display:none>Install app</button><button id=bx>Close</button></div></dialog>
+<div id=ts></div>
+<script>
+const $=s=>document.querySelector(s),sleep=ms=>new Promise(r=>setTimeout(r,ms)),tx=(c,t)=>(Q=Q.then(()=>send(c,t)).catch(()=>'ERR'));
+let Q=Promise.resolve(),dev,ch={},buf='',pend=null,demo=false,live=false,sup=new Set(),V={},T0=0,rec=null,recT,GPS={},gw,gid,trips=[],alerted={};
+const P=[
+{id:'0C',k:'rpm',n:'Engine speed',u:'rpm',f:(a,b)=>(a*256+b)/4,h:1,w:3800,x:4500},
+{id:'0D',k:'spd',n:'Speed',u:'km/h',f:a=>a,h:1},
+{id:'05',k:'clt',n:'Coolant',u:'°C',f:a=>a-40,w:100,x:108},
+{id:'5C',k:'oil',n:'Oil temp',u:'°C',f:a=>a-40,w:125,x:140},
+{id:'0F',k:'iat',n:'Intake air',u:'°C',f:a=>a-40,w:60,x:80},
+{id:'04',k:'load',n:'Engine load',u:'%',f:a=>a*100/255},
+{id:'11',k:'thr',n:'Throttle',u:'%',f:a=>a*100/255},
+{id:'10',k:'maf',n:'Air flow',u:'g/s',f:(a,b)=>(a*256+b)/100,d:1},
+{id:'0B',k:'map',n:'Manifold',u:'kPa',f:a=>a,h:1},
+{id:'33',k:'baro',n:'Barometric',u:'kPa',f:a=>a,h:1},
+{k:'boost',n:'Boost',u:'bar',d:2,w:2,x:2.4},
+{id:'23',k:'rail',n:'Rail pressure',u:'bar',f:(a,b)=>(a*256+b)/10,w:2000,x:2300},
+{id:'3C',k:'egt',n:'Exhaust temp',u:'°C',f:(a,b)=>(a*256+b)/10-40,w:700,x:800},
+{id:'2C',k:'egr',n:'EGR command',u:'%',f:a=>a*100/255},
+{id:'42',k:'volt',n:'Battery',u:'V',f:(a,b)=>(a*256+b)/1000,d:1,lo:13.2},
+{id:'5E',k:'fuel',n:'Fuel rate',u:'L/h',f:(a,b)=>(a*256+b)/20,d:1},
+{id:'2F',k:'lvl',n:'Fuel level',u:'%',f:a=>a*100/255}];
+const KEYS=['rpm','spd','clt','oil','iat','load','thr','maf','boost','rail','egt','egr','volt','fuel','lvl'];
+const DD={P0299:'Turbo underboost',P0234:'Turbo overboost',P2263:'Boost system performance',P0045:'Turbo boost control circuit',P0087:'Fuel rail pressure too low',P0088:'Fuel rail pressure too high',P0101:'Air flow sensor range',P0102:'Air flow sensor low',P0401:'EGR flow insufficient',P0402:'EGR flow excessive',P2002:'DPF efficiency low',P2463:'DPF soot accumulation',P242F:'DPF ash accumulation',P2459:'DPF regeneration too frequent',P0118:'Coolant temp sensor high',P0562:'System voltage low',P0563:'System voltage high',P0380:'Glow plug circuit',P0670:'Glow plug module',P0201:'Injector cyl 1 circuit',P0202:'Injector cyl 2 circuit',P0203:'Injector cyl 3 circuit',P0204:'Injector cyl 4 circuit',P0205:'Injector cyl 5 circuit',P0206:'Injector cyl 6 circuit'};
+const MODS=[['Engine','7E0','7E8'],['Transmission','7E1','7E9'],['Gateway','710','77A'],['Steering','712','77C'],['ABS/ESP','713','77D'],['Instruments','714','77E'],['Airbag','715','77F'],['Climate','746','7B0']];
+function toast(m){const t=$('#ts');t.textContent=m;t.style.display='block';clearTimeout(t.h);t.h=setTimeout(()=>t.style.display='none',3500)}
+const hx=r=>r.split(/[\r\n]+/).map(l=>l.trim()).filter(l=>!/^[0-9A-F]{3}$/.test(l)).map(l=>l.replace(/^[0-9A-F]:/,'').replace(/\s/g,'')).filter(l=>/^[0-9A-F]+$/.test(l)).join('');
+const h2=n=>n.toString(16).toUpperCase().padStart(2,'0');
+const dtc=(a,b)=>'PCBU'[a>>6]+((a>>4)&3)+(a&15).toString(16).toUpperCase()+h2(b);
+/* ---- adapter ---- */
+const SV=[0xfff0,0xffe0,0x18f0,'e7810a71-73ae-499d-8c15-faa9aef0c3f2','6e400001-b5a3-f393-8d3a-a3e1f6e3c7b4','49535343-fe7d-4ae5-8fa9-9fafd205e455'];
+function send(c,t=4000){return new Promise(async(res,rej)=>{const to=setTimeout(()=>{pend=null;rej()},t);pend=r=>{clearTimeout(to);res(r)};
+const d=new TextEncoder().encode(c+'\r');try{for(let i=0;i<d.length;i+=20){const p=d.slice(i,i+20);ch.tx.properties.writeWithoutResponse?await ch.tx.writeValueWithoutResponse(p):await ch.tx.writeValue(p)}}catch(e){clearTimeout(to);rej()}})}
+async function connectBle(){
+if(!navigator.bluetooth)return toast('Open this app in Chrome on Android (https) to use Bluetooth.');
+try{dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:SV});$('#cd').close();toast('Connecting…');
+const srv=await dev.gatt.connect();ch={};
+for(const s of await srv.getPrimaryServices())for(const c of await s.getCharacteristics()){const p=c.properties;if(p.notify&&!ch.rx)ch.rx=c;if((p.write||p.writeWithoutResponse)&&!ch.tx)ch.tx=c}
+await ch.rx.startNotifications();buf='';
+ch.rx.addEventListener('characteristicvaluechanged',e=>{buf+=new TextDecoder().decode(e.target.value);if(buf.includes('>')){const r=buf.replace('>','');buf='';if(pend){const f=pend;pend=null;f(r)}}});
+dev.addEventListener('gattserverdisconnected',()=>{if(live&&!demo){stopAll();toast('Adapter disconnected')}});
+for(const c of['ATZ','ATE0','ATL0','ATS0','ATH0','ATAT1','ATSP0'])await tx(c,c=='ATZ'?6000:3000);
+await tx('0100',10000);await detect();demo=false;begin(dev.name||'Adapter');vin()}catch(e){toast('Could not connect. Check the adapter is powered and not paired to another app.')}}
+async function detect(){sup=new Set();for(const b of[0,32,64,96]){const k=h2(b),h=hx(await tx('01'+k)),i=h.indexOf('41'+k);if(i<0)break;const m=parseInt(h.substr(i+4,8),16);for(let j=0;j<32;j++)if(m&(2**(31-j)))sup.add(h2(b+j+1));if(!(m&1))break}}
+async function vin(){const h=hx(await tx('0902',6000)),i=h.indexOf('4902');if(i<0)return;const s=(h.slice(i+6).match(/../g)||[]).map(x=>parseInt(x,16)).filter(c=>c>47&&c<91).map(c=>String.fromCharCode(c)).join('').slice(-17);if(s.length==17){$('#sub').textContent=s;localStorage.vin=s}}
+function begin(n){live=true;T0=Date.now();V={};$('#cb').classList.add('on');$('#cb span').textContent=n;$('#sub').textContent=localStorage.vin||'2018 Amarok 3.0 V6 TDI';poll()}
+function sim(t){const spd=Math.max(0,60-60*Math.cos(t/21)+10*Math.sin(t/5)),ld=spd<3?18:Math.min(100,30+45*Math.sin(t/7)**2+spd/4),rpm=spd<3?790+Math.random()*20:1000+spd*22+ld*6;
+return{rpm,spd,clt:Math.min(90,30+t/5),oil:Math.min(95,28+t/6),iat:32+ld/10,load:ld,thr:ld*.8,maf:ld*.9+8,map:82+ld*1.1,baro:82,rail:300+ld*13+rpm/20,egt:150+ld*5,egr:ld<40?30:5,volt:14.1+Math.random()*.1,fuel:1.2+ld*.14,lvl:62}}
+async function poll(){const list=P.filter(p=>p.id&&sup.has(p.id));
+while(live){if(demo){Object.assign(V,sim((Date.now()-T0)/1000));await sleep(250)}
+else for(const p of list){if(!live)break;const k=p.id,h=hx(await tx('01'+k,2500)),i=h.indexOf('41'+k);if(i<0)continue;V[p.k]=p.f(...(h.slice(i+4).match(/../g)||[]).map(x=>parseInt(x,16)))}
+if(V.map!=null&&V.baro==null&&(V.rpm||0)<100)V.baro=V.map;
+V.boost=V.map!=null?Math.max(0,(V.map-(V.baro??82))/100):null;render()}}
+function stopAll(){live=false;if(rec)recStop();try{dev&&dev.gatt.connected&&dev.gatt.disconnect()}catch(e){}demo=false;$('#cb').classList.remove('on');$('#cb span').textContent='Connect';$('#sub').textContent='Not connected'}
+/* ---- live view ---- */
+$('#tiles').innerHTML=P.filter(p=>!p.h).map(p=>`<div class="t na" id=t${p.k}><span>${p.n}</span><b class=n>–</b><span>${p.u}</span></div>`).join('');
+const lvl=(p,v)=>p.lo?((V.rpm||0)<400?'':v<p.lo-.8?'x':v<p.lo?'w':''):v>p.x?'x':v>p.w?'w':'';
+function render(){for(const p of P){const v=V[p.k],e=$('#t'+p.k);if(v==null||!e)continue;e.className='t '+lvl(p,v);e.querySelector('b').textContent=v.toFixed(p.d||0);
+if(e.className.includes('x')&&!alerted[p.k]){alerted[p.k]=1;navigator.vibrate&&navigator.vibrate(300);toast(p.n+' is high: '+v.toFixed(p.d||0)+' '+p.u)}else if(!e.className.includes('x'))alerted[p.k]=0}
+if(V.spd!=null){$('#vS').textContent=Math.round(V.spd);$('#aS').style.strokeDasharray=188.5*Math.min(1,V.spd/200)+' 400'}
+if(V.rpm!=null){$('#vR').textContent=Math.round(V.rpm);$('#aR').style.strokeDasharray=188.5*Math.min(1,V.rpm/4500)+' 400'}}
+/* ---- recording ---- */
+const db=new Promise(r=>{const q=indexedDB.open('amarok',1);q.onupgradeneeded=()=>q.result.createObjectStore('trips',{keyPath:'id'});q.onsuccess=()=>r(q.result)});
+const idb=(m,f)=>db.then(d=>new Promise(r=>{const q=f(d.transaction('trips',m).objectStore('trips'));q.onsuccess=()=>r(q.result)}));
+const put=t=>idb('readwrite',s=>s.put(t)),del=id=>idb('readwrite',s=>s.delete(id));
+async function load(){trips=(await idb('readonly',s=>s.getAll())).sort((a,b)=>a.id-b.id);drawTrips();drawHealth()}
+function recStart(){if(!live)return toast('Connect an adapter or start the demo first.');
+rec={id:Date.now(),s:[]};const t0=rec.id;
+gid=navigator.geolocation&&navigator.geolocation.watchPosition(p=>GPS={a:+p.coords.latitude.toFixed(5),o:+p.coords.longitude.toFixed(5)},()=>{},{enableHighAccuracy:true});
+navigator.wakeLock&&navigator.wakeLock.request('screen').then(w=>gw=w).catch(()=>{});
+recT=setInterval(()=>{if(V.rpm==null)return;const t=Math.round((Date.now()-t0)/1000);rec.s.push([t,...KEYS.map(k=>V[k]==null?null:+V[k].toFixed(2)),GPS.a??null,GPS.o??null]);
+if(rec.s.length%20==0)put({...rec,sum:summ(rec.s)});$('#rt').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0')},1000);
+$('#rb').textContent='Stop and save';$('#rb').className='d'}
+async function recStop(){clearInterval(recT);gid!=null&&navigator.geolocation.clearWatch(gid);gw&&gw.release();
+const r=rec;rec=null;$('#rb').textContent='Start recording';$('#rb').className='p';$('#rt').textContent='';
+if(r&&r.s.length>10){r.sum=summ(r.s);await put(r);toast('Trip saved');await load()}}
+function summ(S){const c=k=>S.map(r=>r[1+KEYS.indexOf(k)]).filter(v=>v!=null),mx=k=>{const a=c(k);return a.length?Math.max(...a):null},
+dist=S.reduce((a,r)=>a+(r[2]||0)/3600,0),fuel=S.reduce((a,r)=>a+(r[1+KEYS.indexOf('fuel')]||0)/3600,0),
+run=S.filter(r=>r[2]==0&&r[1]>500&&r[1+KEYS.indexOf('volt')]!=null).map(r=>r[1+KEYS.indexOf('volt')]),
+w=S.find(r=>r[1+KEYS.indexOf('clt')]>=80),c0=S[0][1+KEYS.indexOf('clt')];
+return{dur:S[S.length-1][0],dist,cltMax:mx('clt'),boostMax:mx('boost'),mafMax:mx('maf'),railMax:mx('rail'),egtMax:mx('egt'),loadMax:mx('load'),iatMax:mx('iat'),
+volt:run.length>5?run.reduce((a,b)=>a+b)/run.length:null,warm:c0<60&&w?w[0]:null,l100:fuel>0&&dist>3?fuel/dist*100:null}}
+function csv(t){const a=['t,'+KEYS.join(',')+',lat,lon',...t.s.map(r=>r.join(','))];dl(a.join('\n'),'amarok-'+new Date(t.id).toISOString().slice(0,16).replace(/[:T]/g,'-')+'.csv','text/csv')}
+function dl(txt,n,ty){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:ty}));a.download=n;a.click()}
+function drawTrips(){$('#tl').innerHTML=trips.length?[...trips].reverse().map(t=>{const s=t.sum||{};return`<div class=c><div class=sp><div><h3>${new Date(t.id).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</h3><span class=dim>${Math.round(s.dur/60)} min, ${(s.dist||0).toFixed(1)} km, peak coolant ${s.cltMax?.toFixed(0)??'–'} °C, peak boost ${s.boostMax?.toFixed(2)??'–'} bar</span></div></div>
+<div class=row style="margin:8px 0 0"><button onclick="csv(trips.find(x=>x.id==${t.id}))">Export CSV</button><button class=d onclick="if(confirm('Delete this trip?'))del(${t.id}).then(load)">Delete</button></div></div>`}).join(''):'<p class=dim>No trips yet. Start recording on the Live tab while driving.</p>'}
+$('#ex').onclick=()=>dl(JSON.stringify(trips),'amarok-trips-backup.json','application/json');
+/* ---- health analysis ---- */
+const M=[['cltMax','Peak coolant','°C'],['boostMax','Peak boost','bar'],['mafMax','Peak air flow','g/s'],['railMax','Peak rail pressure','bar'],['egtMax','Peak exhaust temp','°C'],['volt','Charging voltage','V'],['warm','Warm-up to 80 °C','s'],['l100','Fuel use','L/100 km']];
+const spark=a=>{if(a.length<2)return'<svg></svg>';const mn=Math.min(...a),r=Math.max(...a)-mn||1;return`<svg viewBox="0 0 100 24"><polyline fill=none stroke=currentColor stroke-width=2 points="${a.map((v,i)=>(i/(a.length-1)*100).toFixed(1)+','+(22-(v-mn)/r*20).toFixed(1)).join(' ')}"/></svg>`};
+function drawHealth(){const T=trips.filter(t=>t.sum&&t.sum.dur>120),o=[];
+if(T.length<3){$('#hl').innerHTML=`<div class=c><h3>Building your baseline</h3><span class=dim>${T.length} of 3 drives of 2+ minutes recorded. After that, each new drive is compared with your usual numbers to flag drift before a fault appears.</span></div>`;return}
+const L=T[T.length-1].sum,B=T.slice(-11,-1).map(t=>t.sum),md=k=>{const a=B.map(s=>s[k]).filter(v=>v!=null).sort((x,y)=>x-y);return a.length>=2?a[a.length>>1]:null};
+const same=md('loadMax')==null||L.loadMax==null||Math.abs(L.loadMax-md('loadMax'))<15;
+const chk=(k,t,dir,pct,msg,needSame)=>{const v=L[k],m=md(k);if(v==null||m==null||(needSame&&!same))return;const d=dir*(v-m)/m*100;if(d>pct)o.push({s:d>pct*2?'bad':'warn',t,m:`${msg}: ${v.toFixed(1)} vs usual ${m.toFixed(1)}`})};
+if(L.cltMax>108)o.push({s:'bad',t:'Engine running hot',m:`Peak coolant ${L.cltMax.toFixed(0)} °C. Check coolant level, fan and thermostat.`});else if(L.cltMax>104)o.push({s:'warn',t:'Coolant running warm',m:`Peak ${L.cltMax.toFixed(0)} °C on the last drive.`});
+if(L.volt!=null&&L.volt<12.8)o.push({s:'bad',t:'Charging system',m:`Average ${L.volt.toFixed(1)} V with engine running. Test battery and alternator.`});else if(L.volt!=null&&L.volt<13.4)o.push({s:'warn',t:'Charging voltage low',m:`Average ${L.volt.toFixed(1)} V with engine running.`});
+chk('boostMax','Boost dropping',-1,12,'Peak boost at similar load',1);chk('mafMax','Air flow dropping',-1,10,'Peak air flow. Possible intake restriction, leak or dirty sensor',1);
+chk('railMax','Rail pressure dropping',-1,10,'Peak rail pressure. Possible fuel supply or pump wear',1);chk('warm','Slow warm-up',1,40,'Time to 80 °C. Possible thermostat stuck open');
+chk('l100','Fuel use rising',1,15,'Fuel use');chk('egtMax','Exhaust temps rising',1,8,'Peak exhaust temperature');chk('iatMax','Intake temps rising',1,15,'Peak intake air temp. Check intercooler');
+$('#hl').innerHTML=(o.length?o.map(x=>`<div class=c><h3 class=${x.s}>${x.t}</h3><span class=dim>${x.m}</span></div>`).join(''):`<div class=c><h3 class=ok>No drift detected</h3><span class=dim>The last drive matches your usual numbers.</span></div>`)+
+M.map(([k,n,u])=>{const a=T.map(t=>t.sum[k]).filter(v=>v!=null).slice(-12);return a.length?`<div class=c><div class=sp><div><h3>${n}</h3><span class=dim>Latest ${a[a.length-1].toFixed(1)} ${u}</span></div>${spark(a)}</div></div>`:''}).join('')}
+/* ---- faults ---- */
+const gl=()=>JSON.parse(localStorage.scans||'[]');
+const row=(c,d,x)=>`<div class=c><h3 class=n>${c} ${x||''}</h3><span class=dim>${d||DD[c.slice(0,5)]||'See workshop manual'}</span></div>`;
+async function readCodes(){if(!live)return toast('Connect an adapter or start the demo first.');$('#fl').innerHTML='<p class=dim>Reading…</p>';const out=[];let mil='';
+if(demo)out.push(['Stored','P0299'],['Pending','P0401']);else{const m=hx(await tx('0101')),i=m.indexOf('4101');if(i>=0){const a=parseInt(m.substr(i+4,2),16);mil=`Warning light ${a&128?'ON':'off'}, ${a&127} emissions code(s).`}
+for(const[c,n,p]of[['03','Stored','43'],['07','Pending','47'],['0A','Permanent','4A']]){const h=hx(await tx(c)),i=h.indexOf(p);if(i<0)continue;const k=parseInt(h.substr(i+2,2),16),d=h.substr(i+4,k*4);for(let j=0;j<k;j++){const a=parseInt(d.substr(j*4,2),16),b=parseInt(d.substr(j*4+2,2),16);if(a||b)out.push([n,dtc(a,b)])}}}
+const prev=gl(),last=prev[prev.length-1],old=new Set(last?last.c:[]);prev.push({t:Date.now(),c:out.map(x=>x[1])});localStorage.scans=JSON.stringify(prev.slice(-50));
+$('#fl').innerHTML=`<p class=dim>${mil}</p>`+(out.length?out.map(([n,c])=>row(c,0,`<span class=dim>${n}${last&&!old.has(c)?', new since last scan':''}</span>`)).join(''):'<div class=c><h3 class=ok>No engine codes</h3></div>')}
+async function scanAll(){if(!live)return toast('Connect an adapter or start the demo first.');$('#fl').innerHTML='<p class=dim>Scanning modules…</p>';let h='';window.found=[];
+for(const[n,q,r]of MODS){let codes=null;if(demo)codes=n=='Engine'?['P0299-00']:n=='ABS/ESP'?[]:null;else{await tx('ATSH'+q);await tx('ATCRA'+r);const x=hx(await tx('1902FF',1500)),i=x.indexOf('5902');if(i>=0){codes=[];const d=x.slice(i+6);for(let j=0;j+8<=d.length;j+=8){const a=parseInt(d.substr(j,2),16),b=parseInt(d.substr(j+2,2),16),st=parseInt(d.substr(j+6,2),16);codes.push((q[0]=='7'&&q[1]=='E'?dtc(a,b)+'-'+d.substr(j+4,2):'0x'+d.substr(j,6))+(st&1?' active':' stored'))}}}
+if(codes){if(codes.length)window.found.push([q,r]);h+=`<div class=c><h3>${n}</h3>${codes.length?codes.map(c=>`<div class=n>${c} <span class=dim>${DD[c.slice(0,5)]||''}</span></div>`).join(''):'<span class=ok>No codes</span>'}</div>`}}
+if(!demo){await tx('ATAR');await tx('ATSH7DF')}
+$('#fl').innerHTML=h||'<p class=dim>No modules answered. This adapter or car may not allow module access.</p>'}
+async function clearAll(){if(!live)return toast('Connect an adapter or start the demo first.');if(!confirm('Clear fault codes? Active faults will return. Freeze-frame data and readiness status are also erased.'))return;
+if(!demo){await tx('04');for(const[q,r]of window.found||[]){await tx('ATSH'+q);await tx('ATCRA'+r);await tx('14FFFFFF',1500)}await tx('ATAR');await tx('ATSH7DF')}
+toast('Clear command sent. Read codes again to confirm.')}
+/* ---- wiring ---- */
+$('#f1').onclick=readCodes;$('#f2').onclick=scanAll;$('#f3').onclick=clearAll;$('#rb').onclick=()=>rec?recStop():recStart();
+$('#cb').onclick=()=>live?(confirm('Disconnect?')&&stopAll()):$('#cd').showModal();$('#bx').onclick=()=>$('#cd').close();$('#bc').onclick=connectBle;
+$('#bd').onclick=()=>{$('#cd').close();demo=true;sup=new Set(P.filter(p=>p.id).map(p=>p.id));begin('Demo')};
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,section').forEach(e=>e.classList.remove('on'));b.classList.add('on');$('#'+b.dataset.t).classList.add('on')});
+let ip;addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;$('#bi').style.display='';});$('#bi').onclick=()=>ip&&ip.prompt();
+document.addEventListener('visibilitychange',()=>{if(rec&&document.visibilityState=='visible'&&navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>gw=w).catch(()=>{})});
+if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js');
+load();if(localStorage.vin)$('#sub').textContent=localStorage.vin+' (last connected)';
+</script></body></html>
