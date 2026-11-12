@@ -28,7 +28,7 @@ details.c summary{list-style:none;cursor:pointer}details.c summary::-webkit-deta
 dialog{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-radius:16px;padding:16px;width:min(92vw,380px)}dialog::backdrop{background:#000a}dialog .row{margin:12px 0 0}
 #ts{position:fixed;left:12px;right:12px;bottom:78px;background:#243244;border-radius:10px;padding:10px 14px;display:none;z-index:9}
 </style></head><body>
-<header><h1>Amarok V6 scan<small id=sub>Not connected</small></h1><button class=chip id=cb><i></i><span>Connect</span></button></header>
+<header><h1>Amarok V6 scan <span class=dim id=ver></span><small id=sub>Not connected</small></h1><button class=chip id=cb><i></i><span>Connect</span></button></header>
 <main>
 <section id=live class=on>
 <div class=gg>
@@ -185,5 +185,6 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.query
 let ip;addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;$('#bi').style.display='';});$('#bi').onclick=()=>ip&&ip.prompt();
 document.addEventListener('visibilitychange',()=>{if(rec&&document.visibilityState=='visible'&&navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>gw=w).catch(()=>{})});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js');
+const VER='1.2';$('#ver').textContent='v'+VER;
 load();if(localStorage.vin)$('#sub').textContent=localStorage.vin+' (last connected)';
 </script></body></html>
