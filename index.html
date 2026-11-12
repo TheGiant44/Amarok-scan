@@ -24,6 +24,7 @@ nav{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:re
 nav button{border:0;border-radius:0;background:none;color:var(--dim);min-height:60px}nav button.on{color:var(--am);font-weight:700}
 .c h3{font-size:15px;margin-bottom:2px}.bad{color:var(--bad)}.warn{color:var(--am)}.ok{color:var(--ok)}
 .c svg{width:100%;height:28px;color:var(--am)}.sp{display:flex;justify-content:space-between;align-items:center;gap:10px}.sp>div{min-width:0}.sp svg{width:110px;flex:none}
+details.c summary{list-style:none;cursor:pointer}details.c summary::-webkit-details-marker{display:none}.mp{height:260px;border-radius:10px;margin:10px 0;background:#0c1118}a{color:var(--am)}
 dialog{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-radius:16px;padding:16px;width:min(92vw,380px)}dialog::backdrop{background:#000a}dialog .row{margin:12px 0 0}
 #ts{position:fixed;left:12px;right:12px;bottom:78px;background:#243244;border-radius:10px;padding:10px 14px;display:none;z-index:9}
 </style></head><body>
@@ -36,7 +37,7 @@ dialog{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-r
 </div>
 <div id=tiles class=g></div>
 <div class=row style="margin-top:12px"><button class=p id=rb>Start recording</button><span class=n id=rt></span></div>
-<p class=dim>Recording logs every sensor once a second with GPS position. Keep the app open while driving; the screen stays awake.</p>
+<p class=dim>Recording starts automatically when the Bluetooth adapter connects and saves when it disconnects. It logs every sensor once a second with GPS position. Keep the app open while driving; the screen stays awake.</p>
 </section>
 <section id=faults>
 <div class=row><button class=p id=f1>Read codes</button><button id=f2>Scan all modules</button><button class=d id=f3>Clear codes</button></div>
@@ -90,7 +91,7 @@ await ch.rx.startNotifications();buf='';
 ch.rx.addEventListener('characteristicvaluechanged',e=>{buf+=new TextDecoder().decode(e.target.value);if(buf.includes('>')){const r=buf.replace('>','');buf='';if(pend){const f=pend;pend=null;f(r)}}});
 dev.addEventListener('gattserverdisconnected',()=>{if(live&&!demo){stopAll();toast('Adapter disconnected')}});
 for(const c of['ATZ','ATE0','ATL0','ATS0','ATH0','ATAT1','ATSP0'])await tx(c,c=='ATZ'?6000:3000);
-await tx('0100',10000);await detect();demo=false;begin(dev.name||'Adapter');vin()}catch(e){toast('Could not connect. Check the adapter is powered and not paired to another app.')}}
+await tx('0100',10000);await detect();demo=false;begin(dev.name||'Adapter');recStart();toast('Connected. Recording started.');vin()}catch(e){toast('Could not connect. Check the adapter is powered and not paired to another app.')}}
 async function detect(){sup=new Set();for(const b of[0,32,64,96]){const k=h2(b),h=hx(await tx('01'+k)),i=h.indexOf('41'+k);if(i<0)break;const m=parseInt(h.substr(i+4,8),16);for(let j=0;j<32;j++)if(m&(2**(31-j)))sup.add(h2(b+j+1));if(!(m&1))break}}
 async function vin(){const h=hx(await tx('0902',6000)),i=h.indexOf('4902');if(i<0)return;const s=(h.slice(i+6).match(/../g)||[]).map(x=>parseInt(x,16)).filter(c=>c>47&&c<91).map(c=>String.fromCharCode(c)).join('').slice(-17);if(s.length==17){$('#sub').textContent=s;localStorage.vin=s}}
 function begin(n){live=true;T0=Date.now();V={};$('#cb').classList.add('on');$('#cb span').textContent=n;$('#sub').textContent=localStorage.vin||'2018 Amarok 3.0 V6 TDI';poll()}
@@ -132,8 +133,18 @@ return{dur:S[S.length-1][0],dist,cltMax:mx('clt'),boostMax:mx('boost'),mafMax:mx
 volt:run.length>5?run.reduce((a,b)=>a+b)/run.length:null,warm:c0<60&&w?w[0]:null,l100:fuel>0&&dist>3?fuel/dist*100:null}}
 function csv(t){const a=['t,'+KEYS.join(',')+',lat,lon',...t.s.map(r=>r.join(','))];dl(a.join('\n'),'amarok-'+new Date(t.id).toISOString().slice(0,16).replace(/[:T]/g,'-')+'.csv','text/csv')}
 function dl(txt,n,ty){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:ty}));a.download=n;a.click()}
-function drawTrips(){$('#tl').innerHTML=trips.length?[...trips].reverse().map(t=>{const s=t.sum||{};return`<div class=c><div class=sp><div><h3>${new Date(t.id).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</h3><span class=dim>${Math.round(s.dur/60)} min, ${(s.dist||0).toFixed(1)} km, peak coolant ${s.cltMax?.toFixed(0)??'–'} °C, peak boost ${s.boostMax?.toFixed(2)??'–'} bar</span></div></div>
-<div class=row style="margin:8px 0 0"><button onclick="csv(trips.find(x=>x.id==${t.id}))">Export CSV</button><button class=d onclick="if(confirm('Delete this trip?'))del(${t.id}).then(load)">Delete</button></div></div>`}).join(''):'<p class=dim>No trips yet. Start recording on the Live tab while driving.</p>'}
+const ci=KEYS.length+1,gp=t=>t.s.filter(r=>r[ci]!=null&&r[ci+1]!=null).map(r=>[r[ci],r[ci+1]]),
+osm=p=>`https://www.openstreetmap.org/?mlat=${p[0]}&mlon=${p[1]}#map=16/${p[0]}/${p[1]}`;
+function drawTrips(){$('#tl').innerHTML=trips.length?[...trips].reverse().map(t=>{const s=t.sum||{},g=gp(t),a=g[0],b=g[g.length-1];
+return`<details class=c ontoggle="this.open&&openMap(${t.id})"><summary><h3>${new Date(t.id).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})}</h3><span class=dim>${Math.round(s.dur/60)} min, ${(s.dist||0).toFixed(1)} km, peak coolant ${s.cltMax?.toFixed(0)??'–'} °C, peak boost ${s.boostMax?.toFixed(2)??'–'} bar. Tap to open map.</span></summary>
+<div class=dim style="margin-top:10px;line-height:1.7">${a?`Start: <a href="${osm(a)}" target=_blank>${a[0]}, ${a[1]}</a><br>End: <a href="${osm(b)}" target=_blank>${b[0]}, ${b[1]}</a><br>${g.length} GPS points`:'No GPS position was recorded for this trip. Allow location access for the app.'}</div>
+${a?`<div class=mp id=m${t.id}></div>`:''}
+<div class=row style="margin:8px 0 0"><button onclick="csv(trips.find(x=>x.id==${t.id}))">Export CSV</button><button class=d onclick="if(confirm('Delete this trip?'))del(${t.id}).then(load)">Delete</button></div></details>`}).join(''):'<p class=dim>No trips yet. Recording starts automatically when the adapter connects.</p>'}
+let LL;const leaf=()=>LL||(LL=new Promise((ok,no)=>{const l=document.createElement('link');l.rel='stylesheet';l.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.append(l);const j=document.createElement('script');j.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';j.onload=()=>ok(window.L);j.onerror=()=>{LL=null;no()};document.head.append(j)}));
+async function openMap(id){const el=$('#m'+id);if(!el||el.dataset.ok)return;el.dataset.ok=1;const g=gp(trips.find(x=>x.id==id)),st=Math.ceil(g.length/400),pts=g.filter((_,i)=>i%st==0);
+try{const L=await leaf(),m=L.map(el);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(m);
+const pl=L.polyline(pts,{color:'#ff8c00',weight:4}).addTo(m);L.circleMarker(pts[0],{radius:7,color:'#2e9e5b',fillOpacity:1}).addTo(m);L.circleMarker(pts[pts.length-1],{radius:7,color:'#d33',fillOpacity:1}).addTo(m);m.fitBounds(pl.getBounds(),{padding:[20,20],maxZoom:17})}
+catch(e){el.outerHTML='<p class=dim>The map needs an internet connection. The coordinates above still open in OpenStreetMap.</p>'}}
 $('#ex').onclick=()=>dl(JSON.stringify(trips),'amarok-trips-backup.json','application/json');
 /* ---- health analysis ---- */
 const M=[['cltMax','Peak coolant','°C'],['boostMax','Peak boost','bar'],['mafMax','Peak air flow','g/s'],['railMax','Peak rail pressure','bar'],['egtMax','Peak exhaust temp','°C'],['volt','Charging voltage','V'],['warm','Warm-up to 80 °C','s'],['l100','Fuel use','L/100 km']];
