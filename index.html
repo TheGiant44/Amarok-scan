@@ -23,8 +23,8 @@ main{padding:12px}section{display:none}section.on{display:block}
 nav{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--pn);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom)}
 nav button{border:0;border-radius:0;background:none;color:var(--dim);min-height:60px}nav button.on{color:var(--am);font-weight:700}
 .c h3{font-size:15px;margin-bottom:2px}.bad{color:var(--bad)}.warn{color:var(--am)}.ok{color:var(--ok)}
-.c svg{width:100%;height:28px;color:var(--am)}.sp{display:flex;justify-content:space-between;align-items:center;gap:10px}.sp>div{min-width:0}.sp svg{width:110px;flex:none}
-details.c summary{list-style:none;cursor:pointer}details.c summary::-webkit-details-marker{display:none}.mp{height:260px;border-radius:10px;margin:10px 0;background:#0c1118}a{color:var(--am)}
+.sp{display:flex;justify-content:space-between;align-items:center;gap:10px}.sp>div{min-width:0}.sp svg{width:110px;height:28px;color:var(--am);flex:none}
+details.c summary{list-style:none;cursor:pointer}details.c summary::-webkit-details-marker{display:none}.mp{height:340px;border-radius:10px;margin:10px 0;background:#0c1118}a{color:var(--am)}
 dialog{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-radius:16px;padding:16px;width:min(92vw,380px)}dialog::backdrop{background:#000a}dialog .row{margin:12px 0 0}
 #ts{position:fixed;left:12px;right:12px;bottom:78px;background:#243244;border-radius:10px;padding:10px 14px;display:none;z-index:9}
 </style></head><body>
@@ -138,12 +138,17 @@ osm=p=>`https://www.openstreetmap.org/?mlat=${p[0]}&mlon=${p[1]}#map=16/${p[0]}/
 function drawTrips(){$('#tl').innerHTML=trips.length?[...trips].reverse().map(t=>{const s=t.sum||{},g=gp(t),a=g[0],b=g[g.length-1];
 return`<details class=c ontoggle="this.open&&openMap(${t.id})"><summary><h3>${new Date(t.id).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})}</h3><span class=dim>${Math.round(s.dur/60)} min, ${(s.dist||0).toFixed(1)} km, peak coolant ${s.cltMax?.toFixed(0)??'–'} °C, peak boost ${s.boostMax?.toFixed(2)??'–'} bar. Tap to open map.</span></summary>
 <div class=dim style="margin-top:10px;line-height:1.7">${a?`Start: <a href="${osm(a)}" target=_blank>${a[0]}, ${a[1]}</a><br>End: <a href="${osm(b)}" target=_blank>${b[0]}, ${b[1]}</a><br>${g.length} GPS points`:'No GPS position was recorded for this trip. Allow location access for the app.'}</div>
-${a?`<div class=mp id=m${t.id}></div>`:''}
+${a?`<div class=dim style="margin-top:8px">Tap the route to see the sensor readings at that point.</div><div class=mp id=m${t.id}></div>`:''}
 <div class=row style="margin:8px 0 0"><button onclick="csv(trips.find(x=>x.id==${t.id}))">Export CSV</button><button class=d onclick="if(confirm('Delete this trip?'))del(${t.id}).then(load)">Delete</button></div></details>`}).join(''):'<p class=dim>No trips yet. Recording starts automatically when the adapter connects.</p>'}
 let LL;const leaf=()=>LL||(LL=new Promise((ok,no)=>{const l=document.createElement('link');l.rel='stylesheet';l.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.append(l);const j=document.createElement('script');j.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';j.onload=()=>ok(window.L);j.onerror=()=>{LL=null;no()};document.head.append(j)}));
-async function openMap(id){const el=$('#m'+id);if(!el||el.dataset.ok)return;el.dataset.ok=1;const g=gp(trips.find(x=>x.id==id)),st=Math.ceil(g.length/400),pts=g.filter((_,i)=>i%st==0);
+const info=(t,r)=>{const tm=new Date(t.id+r[0]*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+return`<div style="font:13px/1.45 system-ui"><b>${tm}</b>, ${Math.floor(r[0]/60)}:${String(r[0]%60).padStart(2,'0')} into trip<br>${r[ci]}, ${r[ci+1]}<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:6px">`+KEYS.map((k,i)=>{const v=r[1+i],p=P.find(x=>x.k==k);return v==null?'':`<div>${p.n}<br><b>${(+v).toFixed(p.d||0)}</b> ${p.u}</div>`}).join('')+'</div></div>'};
+async function openMap(id){const el=$('#m'+id);if(!el||el.dataset.ok)return;el.dataset.ok=1;const t=trips.find(x=>x.id==id),st=Math.ceil(t.s.length/1500),R=t.s.filter((r,i)=>i%st==0&&r[ci]!=null&&r[ci+1]!=null),pts=R.map(r=>[r[ci],r[ci+1]]);
 try{const L=await leaf(),m=L.map(el);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(m);
-const pl=L.polyline(pts,{color:'#ff8c00',weight:4}).addTo(m);L.circleMarker(pts[0],{radius:7,color:'#2e9e5b',fillOpacity:1}).addTo(m);L.circleMarker(pts[pts.length-1],{radius:7,color:'#d33',fillOpacity:1}).addTo(m);m.fitBounds(pl.getBounds(),{padding:[20,20],maxZoom:17})}
+const pl=L.polyline(pts,{color:'#ff8c00',weight:5,interactive:false}).addTo(m);L.circleMarker(pts[0],{radius:8,color:'#2e9e5b',fillOpacity:1,interactive:false}).addTo(m);L.circleMarker(pts[pts.length-1],{radius:8,color:'#d33',fillOpacity:1,interactive:false}).addTo(m);
+const sel=L.circleMarker(pts[0],{radius:9,color:'#fff',weight:3,fillColor:'#ff8c00',fillOpacity:1,interactive:false});
+L.polyline(pts,{weight:30,opacity:.01}).addTo(m).on('click',e=>{let bi=0,bd=1e12;pts.forEach((p,i)=>{const d=e.latlng.distanceTo(p);if(d<bd){bd=d;bi=i}});sel.setLatLng(pts[bi]).addTo(m);L.popup({maxWidth:300}).setLatLng(pts[bi]).setContent(info(t,R[bi])).openOn(m)});
+m.fitBounds(pl.getBounds(),{padding:[20,20],maxZoom:17});setTimeout(()=>m.invalidateSize(),300)}
 catch(e){el.outerHTML='<p class=dim>The map needs an internet connection. The coordinates above still open in OpenStreetMap.</p>'}}
 $('#ex').onclick=()=>dl(JSON.stringify(trips),'amarok-trips-backup.json','application/json');
 /* ---- health analysis ---- */
@@ -185,6 +190,6 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.query
 let ip;addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;$('#bi').style.display='';});$('#bi').onclick=()=>ip&&ip.prompt();
 document.addEventListener('visibilitychange',()=>{if(rec&&document.visibilityState=='visible'&&navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>gw=w).catch(()=>{})});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js');
-const VER='1.2';$('#ver').textContent='v'+VER;
+const VER='1.3';$('#ver').textContent='v'+VER;
 load();if(localStorage.vin)$('#sub').textContent=localStorage.vin+' (last connected)';
 </script></body></html>
