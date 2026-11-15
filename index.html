@@ -29,6 +29,7 @@ dialog{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-r
 #ts{position:fixed;left:12px;right:12px;bottom:78px;background:#243244;border-radius:10px;padding:10px 14px;display:none;z-index:9}
 .kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin:10px 0}.kv b{text-align:right}.lst .sp{padding:4px 0;border-top:1px solid var(--ln)}.c svg.big{height:96px;width:100%}
 input[type=number]{width:96px;background:var(--bg);color:var(--ink);border:1px solid var(--ln);border-radius:8px;padding:8px;font:inherit;text-align:right}
+select{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-radius:10px;padding:10px;font:inherit;min-height:44px}.g.sm .t{padding:6px 8px}.g.sm .t b{font-size:21px}input[type=range]{accent-color:var(--am)}
 </style></head><body>
 <header><h1>Amarok V6 scan <span class=dim id=ver></span><small id=sub>Not connected</small></h1><button class=chip id=cb><i></i><span>Connect</span></button></header>
 <main>
@@ -75,8 +76,15 @@ const P=[
 {id:'42',k:'volt',n:'Battery',u:'V',f:(a,b)=>(a*256+b)/1000,d:1,lo:13.2},
 {id:'5E',k:'fuel',n:'Fuel rate',u:'L/h',f:(a,b)=>(a*256+b)/20,d:1},
 {id:'2F',k:'lvl',n:'Fuel level',u:'%',f:a=>a*100/255},
-{k:'atf',n:'Gearbox oil',u:'°C',w:110,x:130},{k:'egt2',n:'Exhaust (VW)',u:'°C',w:700,x:800},{k:'soot',n:'DPF soot load',u:'%',w:80,x:95}];
-const KEYS2=['atf','egt2','soot'],TRY=new Set(['0B','33','23','2C','2F']);let cyc=0;
+{k:'atf',n:'Gearbox oil',u:'°C',w:110,x:130},{k:'egt2',n:'Exhaust (VW)',u:'°C',w:700,x:800},{k:'soot',n:'DPF soot load',u:'%',w:80,x:95},
+{k:'boostreq',n:'Boost requested',u:'bar',d:2},{k:'vgt',n:'Turbo vane',u:'%'},{k:'expr',n:'Exhaust pressure',u:'kPa'},{k:'cact',n:'Charge air temp',u:'°C'},{k:'egt1',n:'Exhaust temp 1',u:'°C'},
+{id:'70',k:'p70',h:1,o:d=>{if(d.length<5)return;const c=(d[1]*256+d[2])/32,a=(d[3]*256+d[4])/32,b=V.baro??baroEst();if(V.baro==null&&(V.rpm||0)<100&&a>50&&a<130)V.baro=a;if(a>50&&a<700){V.boost=Math.max(0,(a-b)/100);V.b70=1}if(c>50&&c<700)V.boostreq=Math.max(0,(c-b)/100)}},
+{id:'71',k:'p71',h:1,o:d=>{if(d.length>=3&&d[2]<=255)V.vgt=d[2]*100/255}},
+{id:'73',k:'p73',h:1,o:d=>{if(d.length>=3){const x=(d[1]*256+d[2])/10;if(x>0&&x<1000)V.expr=x}}},
+{id:'77',k:'p77',h:1,o:d=>{if(d.length>=2&&d[1]>0&&d[1]<255)V.cact=d[1]-40}},
+{id:'78',k:'p78',h:1,o:d=>{if(d.length>=3){const x=(d[1]*256+d[2])/10-40;if(x>-40&&x<1100)V.egt1=x}}}];
+const KEYS2=['atf','egt2','soot','boostreq','vgt','expr','cact','egt1'],TRY=new Set(['0B','33','23','2C','2F','70','71','73','77','78']);
+const baroEst=()=>GPS.alt!=null?101.325*Math.pow(1-2.25577e-5*GPS.alt,5.25588):101.3;let cyc=0;
 const VW=[{k:'atf',h:'7E1',c:'22A008',f:a=>a-40,lo:-40,hi:200},{k:'egt2',h:'7E0',c:'229DD4',f:(a,b,c)=>(b*256+c)/10-40,lo:-40,hi:1100},{k:'soot',h:'7E0',c:'229D63',f:(a,b,c,d)=>d*100/255,lo:0,hi:100}];
 const KEYS=['rpm','spd','clt','oil','iat','load','thr','maf','boost','rail','egt','egr','volt','fuel','lvl'];
 const DD={P0299:'Turbo underboost',P0234:'Turbo overboost',P2263:'Boost system performance',P0045:'Turbo boost control circuit',P0087:'Fuel rail pressure too low',P0088:'Fuel rail pressure too high',P0101:'Air flow sensor range',P0102:'Air flow sensor low',P0401:'EGR flow insufficient',P0402:'EGR flow excessive',P2002:'DPF efficiency low',P2463:'DPF soot accumulation',P242F:'DPF ash accumulation',P2459:'DPF regeneration too frequent',P0118:'Coolant temp sensor high',P0562:'System voltage low',P0563:'System voltage high',P0380:'Glow plug circuit',P0670:'Glow plug module',P0201:'Injector cyl 1 circuit',P0202:'Injector cyl 2 circuit',P0203:'Injector cyl 3 circuit',P0204:'Injector cyl 4 circuit',P0205:'Injector cyl 5 circuit',P0206:'Injector cyl 6 circuit'};
@@ -105,7 +113,7 @@ async function detect(){sup=new Set();for(const b of[0,32,64,96]){const k=h2(b),
 async function vin(){const h=hx(await tx('0902',6000)),i=h.indexOf('4902');if(i<0)return;const s=(h.slice(i+6).match(/../g)||[]).map(x=>parseInt(x,16)).filter(c=>c>47&&c<91).map(c=>String.fromCharCode(c)).join('').slice(-17);if(s.length==17){$('#sub').textContent=s;localStorage.vin=s}}
 function begin(n){VW.forEach(v=>v.bad=0);cyc=0;live=true;T0=Date.now();V={};$('#cb').classList.add('on');$('#cb span').textContent=n;$('#sub').textContent=localStorage.vin||'2018 Amarok 3.0 V6 TDI';poll()}
 function sim(t){const spd=Math.max(0,60-60*Math.cos(t/21)+10*Math.sin(t/5)),ld=spd<3?18:Math.min(100,30+45*Math.sin(t/7)**2+spd/4),rpm=spd<3?790+Math.random()*20:1000+spd*22+ld*6;
-return{rpm,spd,clt:Math.min(90,30+t/5),oil:Math.min(95,28+t/6),iat:32+ld/10,load:ld,thr:ld*.8,maf:ld*.9+8,map:82+ld*1.1,baro:82,rail:300+ld*13+rpm/20,egt:150+ld*5,egr:ld<40?30:5,volt:14.1+Math.random()*.1,fuel:1.2+ld*.14,lvl:62,atf:Math.min(85,35+t/8),egt2:150+ld*5,soot:Math.min(90,35+t/30)}}
+return{rpm,spd,clt:Math.min(90,30+t/5),oil:Math.min(95,28+t/6),iat:32+ld/10,load:ld,thr:ld*.8,maf:ld*.9+8,map:82+ld*1.1,baro:82,rail:300+ld*13+rpm/20,egt:150+ld*5,egr:ld<40?30:5,volt:14.1+Math.random()*.1,fuel:1.2+ld*.14,lvl:62,atf:Math.min(85,35+t/8),egt2:150+ld*5,soot:Math.min(90,35+t/30),boostreq:ld*1.1/100+.03,vgt:30+ld*.5,expr:100+ld*1.5,cact:35+ld/6,egt1:150+ld*5.5}}
 async function vwRead(){let hd='';for(const v of VW){if((v.bad||0)>=3||!live||rc)continue;if(v.h!=hd){await tx('ATSH'+v.h);hd=v.h}
 const h=hx(await tx(v.c,1500)),pre='62'+v.c.slice(2),i=h.indexOf(pre);if(i<0){v.bad=(v.bad||0)+1;continue}
 const x=v.f(...(h.slice(i+pre.length).match(/../g)||[]).map(n=>parseInt(n,16)));if(isFinite(x)&&x>=v.lo&&x<=v.hi){V[v.k]=x;v.bad=0}}
@@ -114,15 +122,15 @@ async function poll(){
 while(live){if(rc){await sleep(1000);continue}cyc++;
 if(demo){Object.assign(V,sim((Date.now()-T0)/1000));okTs=Date.now();await sleep(250)}
 else{const list=P.filter(p=>p.id&&(sup.has(p.id)||(TRY.has(p.id)&&cyc%15==1)));
-for(const p of list){if(!live||rc)break;const k=p.id,h=hx(await tx('01'+k,2500)),i=h.indexOf('41'+k);if(i<0)continue;V[p.k]=p.f(...(h.slice(i+4).match(/../g)||[]).map(x=>parseInt(x,16)));sup.add(k);okTs=Date.now()}
+for(const p of list){if(!live||rc)break;const k=p.id,h=hx(await tx('01'+k,2500)),i=h.indexOf('41'+k);if(i<0)continue;{const d=(h.slice(i+4).match(/../g)||[]).map(x=>parseInt(x,16));p.o?p.o(d):V[p.k]=p.f(...d)}sup.add(k);okTs=Date.now()}
 if(cyc%5==0&&!rc)await vwRead();
 if(Date.now()-okTs>3000)await sleep(500)}
 if(V.map!=null&&V.baro==null&&(V.rpm||0)<100)V.baro=V.map;
-V.boost=V.map!=null?Math.max(0,(V.map-(V.baro??82))/100):null;render();sample()}}
+V.boost=V.b70?V.boost:V.map!=null?Math.max(0,(V.map-(V.baro??baroEst()))/100):null;render();sample()}}
 function stopAll(){live=false;if(rec)recStop();try{dev&&dev.gatt.connected&&dev.gatt.disconnect()}catch(e){}demo=false;$('#cb').classList.remove('on');$('#cb span').textContent='Connect';$('#sub').textContent='Not connected'}
 /* ---- live view ---- */
 $('#tiles').innerHTML=P.filter(p=>!p.h).map(p=>`<div class="t na" id=t${p.k}><span>${p.n}</span><b class=n>–</b><span>${p.u}</span></div>`).join('');
-const LIM={rpm:4500,clt:110,oil:140,iat:80,boost:2,rail:2000,egt:800,egt2:800,volt:16,atf:130,soot:100};let LM={...LIM};try{Object.assign(LM,JSON.parse(localStorage.lim||'{}'))}catch(e){}
+const LIM={rpm:4500,clt:110,oil:140,iat:80,boost:2,rail:2000,egt:800,egt2:800,volt:16,atf:130,soot:100,egt1:800,cact:80};let LM={...LIM};try{Object.assign(LM,JSON.parse(localStorage.lim||'{}'))}catch(e){}
 $('#lmb').innerHTML=Object.keys(LIM).map(k=>{const p=P.find(x=>x.k==k);return`<label class=sp style="padding:5px 0"><span>${p.n} (${p.u})</span><input type=number step=any inputmode=decimal value="${LM[k]}" data-k=${k}></label>`}).join('');
 $('#lmb').oninput=e=>{const k=e.target.dataset.k,v=parseFloat(e.target.value);if(k&&v>0){LM[k]=v;localStorage.lim=JSON.stringify(LM)}};
 $('#lmr').onclick=()=>{localStorage.removeItem('lim');LM={...LIM};document.querySelectorAll('#lmb input').forEach(i=>i.value=LM[i.dataset.k])};
@@ -150,7 +158,7 @@ for(let i=0;i<n;i++)b.setUint8(44+i,128+((i>>5)&1));au=new Audio(URL.createObjec
 au.play().catch(()=>{});if(navigator.mediaSession){navigator.mediaSession.metadata=new MediaMetadata({title:'Recording your drive',artist:'Amarok Scan'});navigator.mediaSession.setActionHandler('pause',()=>au.play())}}
 function recStart(){if(!live)return toast('Connect an adapter or start the demo first.');
 rec={id:Date.now(),s:[]};lastS=0;
-gid=navigator.geolocation&&navigator.geolocation.watchPosition(p=>GPS={a:+p.coords.latitude.toFixed(5),o:+p.coords.longitude.toFixed(5),ts:Date.now()},()=>{},{enableHighAccuracy:true});
+gid=navigator.geolocation&&navigator.geolocation.watchPosition(p=>GPS={a:+p.coords.latitude.toFixed(5),o:+p.coords.longitude.toFixed(5),ts:Date.now(),alt:p.coords.altitude},()=>{},{enableHighAccuracy:true});
 navigator.wakeLock&&navigator.wakeLock.request('screen').then(w=>gw=w).catch(()=>{});keepAlive(1);
 recT=setInterval(()=>{if(!rec)return;const t=Math.round((Date.now()-rec.id)/1000);$('#rt').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0')},1000);
 $('#rb').textContent='Stop and save';$('#rb').className='d'}
@@ -161,8 +169,8 @@ function summ(S){const c=k=>S.map(r=>r[1+KEYS.indexOf(k)]).filter(v=>v!=null),mx
 dist=S.reduce((a,r)=>a+(r[2]||0)/3600,0),fuel=S.reduce((a,r)=>a+(r[1+KEYS.indexOf('fuel')]||0)/3600,0),
 run=S.filter(r=>r[2]==0&&r[1]>500&&r[1+KEYS.indexOf('volt')]!=null).map(r=>r[1+KEYS.indexOf('volt')]),
 w=S.find(r=>r[1+KEYS.indexOf('clt')]>=80),c0=S[0][1+KEYS.indexOf('clt')];
-const ex=j=>{const a=S.map(r=>r[KEYS.length+3+j]).filter(v=>v!=null);return a.length?Math.max(...a):null};
-return{dur:S[S.length-1][0],dist,atfMax:ex(0),sootMax:ex(2),cltMax:mx('clt'),boostMax:mx('boost'),mafMax:mx('maf'),railMax:mx('rail'),egtMax:mx('egt'),loadMax:mx('load'),iatMax:mx('iat'),
+const bErr=()=>{const be=S.map(r=>{const a=r[1+KEYS.indexOf('boost')],q=r[KEYS.length+6];return q!=null&&a!=null&&q>=.3?q-a:null}).filter(v=>v!=null);return be.length>5?be.reduce((x,y)=>x+y)/be.length:null};const ex=j=>{const a=S.map(r=>r[KEYS.length+3+j]).filter(v=>v!=null);return a.length?Math.max(...a):null};
+return{dur:S[S.length-1][0],dist,atfMax:ex(0),sootMax:ex(2),bErr:bErr(),cltMax:mx('clt'),boostMax:mx('boost'),mafMax:mx('maf'),railMax:mx('rail'),egtMax:mx('egt'),loadMax:mx('load'),iatMax:mx('iat'),
 volt:run.length>5?run.reduce((a,b)=>a+b)/run.length:null,warm:c0<60&&w?w[0]:null,l100:fuel>0&&dist>3?fuel/dist*100:null}}
 function csv(t){const a=['t,'+KEYS.join(',')+',lat,lon,'+KEYS2.join(','),...t.s.map(r=>r.join(','))];dl(a.join('\n'),'amarok-'+new Date(t.id).toISOString().slice(0,16).replace(/[:T]/g,'-')+'.csv','text/csv')}
 function dl(txt,n,ty){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:ty}));a.download=n;a.click()}
@@ -171,32 +179,49 @@ osm=p=>`https://www.openstreetmap.org/?mlat=${p[0]}&mlon=${p[1]}#map=16/${p[0]}/
 function drawTrips(){$('#tl').innerHTML=trips.length?[...trips].reverse().map(t=>{const s=t.sum||{},g=gp(t),a=g[0],b=g[g.length-1];
 return`<details class=c ontoggle="this.open&&openMap(${t.id})"><summary><h3>${new Date(t.id).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})}</h3><span class=dim>${Math.round(s.dur/60)} min, ${(s.dist||0).toFixed(1)} km, peak coolant ${s.cltMax?.toFixed(0)??'–'} °C, peak boost ${s.boostMax?.toFixed(2)??'–'} bar. Tap to open map.</span></summary>
 <div class=dim style="margin-top:10px;line-height:1.7">${a?`Start: <a href="${osm(a)}" target=_blank>${a[0]}, ${a[1]}</a><br>End: <a href="${osm(b)}" target=_blank>${b[0]}, ${b[1]}</a><br>${g.length} GPS points`:'No GPS position was recorded for this trip. Allow location access for the app.'}</div>
-${a?`<div class=dim style="margin-top:8px">Tap the route to see the sensor readings at that point.</div><div class=mp id=m${t.id}></div>`:''}
+${a?`<div class=dim style="margin-top:8px">Tap the route to see the readings at that point, or press Play to replay the drive.</div><div class=mp id=m${t.id}></div><div id=rp${t.id}><div class=row style="margin:10px 0 0"><button class=p id=pl${t.id}>Play</button><select id=sp${t.id}><option value=1>1×</option><option value=5 selected>5×</option><option value=10>10×</option><option value=30>30×</option></select><label class=dim><input type=checkbox id=fo${t.id} checked> Follow</label><button id=wh${t.id}>Whole route</button><span class=n id=cl${t.id} style="margin-left:auto"></span></div><input type=range id=sc${t.id} step=any style="width:100%;margin:8px 0"><div class="g sm" id=rd${t.id}></div></div>`:''}
 <div class=row style="margin:8px 0 0"><button onclick="csv(trips.find(x=>x.id==${t.id}))">Export CSV</button><button class=d onclick="if(confirm('Delete this trip?'))del(${t.id}).then(load)">Delete</button></div></details>`}).join(''):'<p class=dim>No trips yet. Recording starts automatically when the adapter connects.</p>'}
 let LL;const leaf=()=>LL||(LL=new Promise((ok,no)=>{const l=document.createElement('link');l.rel='stylesheet';l.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.append(l);const j=document.createElement('script');j.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';j.onload=()=>ok(window.L);j.onerror=()=>{LL=null;no()};document.head.append(j)}));
 const info=(t,r)=>{const tm=new Date(t.id+r[0]*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 return`<div style="font:13px/1.45 system-ui"><b>${tm}</b>, ${Math.floor(r[0]/60)}:${String(r[0]%60).padStart(2,'0')} into trip<br>${r[ci]}, ${r[ci+1]}<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:6px">`+KEYS.concat(KEYS2).map((k,i)=>{const v=i<KEYS.length?r[1+i]:r[ci+2+i-KEYS.length],p=P.find(x=>x.k==k);return v==null?'':`<div>${p.n}<br><b>${(+v).toFixed(p.d||0)}</b> ${p.u}</div>`}).join('')+'</div></div>'};
+const ro=r=>KEYS.concat(KEYS2).map((k,i)=>{const v=i<KEYS.length?r[1+i]:r[ci+2+i-KEYS.length];if(v==null)return'';const p=P.find(x=>x.k==k),l=LM[k],c=l==null?'':v>=l?'x':v>=l*.95?'w':'';return`<div class="t ${c}"><span>${p.n}</span><b class=n>${(+v).toFixed(p.d||0)}</b><span>${p.u}</span></div>`}).join('');
+function replay(L,m,pl,R,pts,t,id){const rp=$('#rp'+id);if(R.length<2){rp.style.display='none';return}
+const F=t.s,F0=F[0][0],FL=F[F.length-1][0],btn=$('#pl'+id),sc=$('#sc'+id),cl=$('#cl'+id),rd=$('#rd'+id),sp=$('#sp'+id),fo=$('#fo'+id),
+bs=(A,p)=>{let lo=0,hi=A.length-1;while(lo<hi){const mid=(lo+hi+1)>>1;if(A[mid][0]<=p)lo=mid;else hi=mid-1}return lo},
+fm=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'),
+mk=L.circleMarker(pts[0],{radius:10,color:'#fff',weight:3,fillColor:'#1976d2',fillOpacity:1,interactive:false}).addTo(m),
+trail=L.polyline([],{color:'#1976d2',weight:6,interactive:false}).addTo(m);
+let pos=F0,playing=false,last=0,raf;sc.min=F0;sc.max=FL;
+function at(p,pan){const i=bs(R,p),a=R[i],b=R[Math.min(i+1,R.length-1)],f=b[0]>a[0]?Math.max(0,Math.min(1,(p-a[0])/(b[0]-a[0]))):0,
+ll=[a[ci]+(b[ci]-a[ci])*f,a[ci+1]+(b[ci+1]-a[ci+1])*f];mk.setLatLng(ll);trail.setLatLngs(pts.slice(0,i+1).concat([ll]));pan&&fo.checked&&m.panTo(ll,{animate:false});
+cl.textContent=fm(p-F0)+' / '+fm(FL-F0);sc.value=p;rd.innerHTML=ro(F[bs(F,p)])}
+function halt(){playing=false;cancelAnimationFrame(raf);btn.textContent=pos>=FL?'Replay':'Play'}
+function tick(ts){if(!playing)return;pos=Math.min(FL,pos+(ts-last)/1000*+sp.value);last=ts;at(pos,1);if(pos>=FL)return halt();raf=requestAnimationFrame(tick)}
+btn.onclick=()=>{if(playing)return halt();if(pos>=FL)pos=F0;playing=true;btn.textContent='Pause';last=performance.now();if(fo.checked)m.setZoom(Math.max(m.getZoom(),15),{animate:false});raf=requestAnimationFrame(tick)};
+sc.oninput=()=>{pos=+sc.value;at(pos,1)};$('#wh'+id).onclick=()=>m.fitBounds(pl.getBounds(),{padding:[20,20],maxZoom:17});
+rp.closest('details').addEventListener('toggle',e=>{if(!e.target.open)halt()});at(pos,0)}
 async function openMap(id){const el=$('#m'+id);if(!el||el.dataset.ok)return;el.dataset.ok=1;const t=trips.find(x=>x.id==id),st=Math.ceil(t.s.length/1500),R=t.s.filter((r,i)=>i%st==0&&r[ci]!=null&&r[ci+1]!=null),pts=R.map(r=>[r[ci],r[ci+1]]);
 try{const L=await leaf(),m=L.map(el);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(m);
 const pl=L.polyline(pts,{color:'#ff8c00',weight:5,interactive:false}).addTo(m);L.circleMarker(pts[0],{radius:8,color:'#2e9e5b',fillOpacity:1,interactive:false}).addTo(m);L.circleMarker(pts[pts.length-1],{radius:8,color:'#d33',fillOpacity:1,interactive:false}).addTo(m);
 const sel=L.circleMarker(pts[0],{radius:9,color:'#fff',weight:3,fillColor:'#ff8c00',fillOpacity:1,interactive:false});
 L.polyline(pts,{weight:30,opacity:.01}).addTo(m).on('click',e=>{let bi=0,bd=1e12;pts.forEach((p,i)=>{const d=e.latlng.distanceTo(p);if(d<bd){bd=d;bi=i}});sel.setLatLng(pts[bi]).addTo(m);L.popup({maxWidth:300}).setLatLng(pts[bi]).setContent(info(t,R[bi])).openOn(m)});
-m.fitBounds(pl.getBounds(),{padding:[20,20],maxZoom:17});setTimeout(()=>m.invalidateSize(),300)}
+m.fitBounds(pl.getBounds(),{padding:[20,20],maxZoom:17});replay(L,m,pl,R,pts,t,id);setTimeout(()=>m.invalidateSize(),300)}
 catch(e){el.outerHTML='<p class=dim>The map needs an internet connection. The coordinates above still open in OpenStreetMap.</p>'}}
 $('#ex').onclick=()=>dl(JSON.stringify(trips),'amarok-trips-backup.json','application/json');
 /* ---- health analysis ---- */
-const M=[['cltMax','Peak coolant','°C'],['boostMax','Peak boost','bar'],['mafMax','Peak air flow','g/s'],['railMax','Peak rail pressure','bar'],['egtMax','Peak exhaust temp','°C'],['volt','Charging voltage','V'],['warm','Warm-up to 80 °C','s'],['l100','Fuel use','L/km'],['atfMax','Peak gearbox oil temp','°C'],['sootMax','Peak DPF soot load','%']];
+const M=[['cltMax','Peak coolant','°C'],['boostMax','Peak boost','bar'],['mafMax','Peak air flow','g/s'],['railMax','Peak rail pressure','bar'],['egtMax','Peak exhaust temp','°C'],['volt','Charging voltage','V'],['warm','Warm-up to 80 °C','s'],['l100','Fuel use','km/L'],['atfMax','Peak gearbox oil temp','°C'],['sootMax','Peak DPF soot load','%'],['bErr','Boost shortfall','bar']];
 const spark=a=>{if(a.length<2)return'<svg></svg>';const mn=Math.min(...a),r=Math.max(...a)-mn||1;return`<svg viewBox="0 0 100 24"><polyline fill=none stroke=currentColor stroke-width=2 points="${a.map((v,i)=>(i/(a.length-1)*100).toFixed(1)+','+(22-(v-mn)/r*20).toFixed(1)).join(' ')}"/></svg>`};
-const TK={'Engine running hot':'cltMax','Coolant running warm':'cltMax','Charging system':'volt','Charging voltage low':'volt','Gearbox oil very hot':'atfMax','Gearbox oil running warm':'atfMax','Boost dropping':'boostMax','Air flow dropping':'mafMax','Rail pressure dropping':'railMax','Slow warm-up':'warm','Fuel use rising':'l100','Exhaust temps rising':'egtMax','Intake temps rising':'iatMax'};
-const ADV={cltMax:'What to check: coolant level and condition, radiator fins, the cooling fan and the thermostat. A reading that keeps climbing over several drives can point to a failing water pump or a blocked radiator.',volt:'What to check: test the battery and the alternator output with a multimeter. Running voltage should be about 13.8 to 14.7 V. Check the battery terminals and earth straps.',atfMax:'What to check: gearbox oil level and condition, and the gearbox cooler. Towing and low-range driving raise this temperature.',boostMax:'What to check: split or loose intercooler hoses and clamps, intake leaks, a sticking turbo actuator and a blocked air filter. Compare drives with similar hard acceleration.',mafMax:'What to check: the air filter, the intake for restrictions or leaks, and the air flow sensor for dirt.',railMax:'What to check: the fuel filter and fuel supply. A falling peak can come from a tired high-pressure pump or leaking injectors. Have it checked soon if it keeps falling.',warm:'What to check: the thermostat may be stuck open. The engine takes longer to reach 80 °C, mostly noticeable on cold mornings.',l100:'What to check: tyre pressures, the air filter, and extra load such as a roof rack or towing. A steady rise can also point to an injector or boost problem.',egtMax:'What to check: a restricted exhaust or DPF, boost leaks and heavy loads. Rising exhaust temperatures over several drives are worth a workshop check.',iatMax:'What to check: the intercooler and its airflow. Hot intake air reduces power and raises exhaust temperatures.'};
-const DESC={cltMax:'Highest engine coolant temperature on each drive. Normal running is roughly 85 to 100 °C.',boostMax:'Highest turbo boost pressure on each drive. It depends on load, so compare drives with similar hard acceleration.',mafMax:'Peak air flow into the engine on each drive. A steady fall at similar load can mean an intake restriction.',railMax:'Peak fuel rail pressure on each drive.',egtMax:'Peak exhaust temperature on each drive.',volt:'Average battery voltage while the engine runs and the vehicle is stopped. Healthy charging is roughly 13.8 to 14.7 V.',warm:'Seconds from a cold start until the coolant reaches 80 °C. Only recorded on cold starts.',l100:'Average fuel used per kilometre driven (litres per km), worked out from the fuel rate sensor.',atfMax:'Peak gearbox oil temperature on each drive.',sootMax:'Peak DPF soot load reading on each drive.'};
-const dec=k=>k=='l100'?3:1;
+const TK={'Engine running hot':'cltMax','Coolant running warm':'cltMax','Charging system':'volt','Charging voltage low':'volt','Gearbox oil very hot':'atfMax','Gearbox oil running warm':'atfMax','Boost dropping':'boostMax','Air flow dropping':'mafMax','Rail pressure dropping':'railMax','Slow warm-up':'warm','Fuel economy dropping':'l100','Boost below requested':'bErr','Exhaust temps rising':'egtMax','Intake temps rising':'iatMax'};
+const ADV={cltMax:'What to check: coolant level and condition, radiator fins, the cooling fan and the thermostat. A reading that keeps climbing over several drives can point to a failing water pump or a blocked radiator.',volt:'What to check: test the battery and the alternator output with a multimeter. Running voltage should be about 13.8 to 14.7 V. Check the battery terminals and earth straps.',atfMax:'What to check: gearbox oil level and condition, and the gearbox cooler. Towing and low-range driving raise this temperature.',boostMax:'What to check: split or loose intercooler hoses and clamps, intake leaks, a sticking turbo actuator and a blocked air filter. Compare drives with similar hard acceleration.',mafMax:'What to check: the air filter, the intake for restrictions or leaks, and the air flow sensor for dirt.',railMax:'What to check: the fuel filter and fuel supply. A falling peak can come from a tired high-pressure pump or leaking injectors. Have it checked soon if it keeps falling.',warm:'What to check: the thermostat may be stuck open. The engine takes longer to reach 80 °C, mostly noticeable on cold mornings.',l100:'What to check: tyre pressures, the air filter, and extra load such as a roof rack or towing. A steady drop can also point to an injector or boost problem.',egtMax:'What to check: a restricted exhaust or DPF, boost leaks and heavy loads. Rising exhaust temperatures over several drives are worth a workshop check.',iatMax:'What to check: the intercooler and its airflow. Hot intake air reduces power and raises exhaust temperatures.'};
+const DESC={cltMax:'Highest engine coolant temperature on each drive. Normal running is roughly 85 to 100 °C.',boostMax:'Highest turbo boost pressure on each drive. It depends on load, so compare drives with similar hard acceleration.',mafMax:'Peak air flow into the engine on each drive. A steady fall at similar load can mean an intake restriction.',railMax:'Peak fuel rail pressure on each drive.',egtMax:'Peak exhaust temperature on each drive.',volt:'Average battery voltage while the engine runs and the vehicle is stopped. Healthy charging is roughly 13.8 to 14.7 V.',warm:'Seconds from a cold start until the coolant reaches 80 °C. Only recorded on cold starts.',l100:'Average distance per litre of fuel (km/L), worked out from the fuel rate sensor. Higher is better.',atfMax:'Peak gearbox oil temperature on each drive.',sootMax:'Peak DPF soot load reading on each drive.'};
+const dec=k=>1;
+ADV.bErr=ADV.boostMax;DESC.bErr='Average gap between the boost the engine asks for and the boost it gets, while boost is being requested. Close to zero is healthy.';
 const A=a=>a.reduce((x,y)=>x+y,0)/a.length;
 const big=(a,u,dg=1)=>{if(a.length<2)return'';const mn=Math.min(...a),mx=Math.max(...a),r=mx-mn||1,p=a.map((v,i)=>[(8+i/(a.length-1)*284).toFixed(1),(14+(1-(v-mn)/r)*62).toFixed(1)]);return`<svg class=big viewBox="0 0 300 90"><polyline fill=none stroke=currentColor stroke-width=2 points="${p.map(x=>x.join(',')).join(' ')}"/>${p.map(x=>`<circle cx=${x[0]} cy=${x[1]} r=3 fill=currentColor />`).join('')}<text x=8 y=10 font-size=10 fill=#8296a8>${mx.toFixed(dg)} ${u}</text><text x=8 y=88 font-size=10 fill=#8296a8>${mn.toFixed(dg)} ${u}</text></svg>`};
 function detail(k,T,us){const u=(M.find(x=>x[0]==k)||[0,0,''])[2],rows=T.filter(t=>t.sum[k]!=null).map(t=>[t.id,t.sum[k]]),a=rows.map(r=>r[1]);if(!a.length)return'';
-const L=a[a.length-1],f=v=>v.toFixed(k=='l100'?3:Math.abs(v)>=100?0:1);
+const L=a[a.length-1],f=v=>v.toFixed(Math.abs(v)>=100?0:1);
 return`<div class=kv><span>Latest</span><b>${f(L)} ${u}</b>`+(us?`<span>Usual (median of earlier drives)</span><b>${f(us)} ${u}</b><span>Change from usual</span><b>${((L-us)/us*100).toFixed(0)}%</b>`:'')+`<span>Average</span><b>${f(A(a))} ${u}</b><span>Lowest</span><b>${f(Math.min(...a))} ${u}</b><span>Highest</span><b>${f(Math.max(...a))} ${u}</b><span>Drives counted</span><b>${a.length}</b></div>${big(a.slice(-20),u,dec(k))}<div class=lst>`+rows.slice(-8).reverse().map(([id,v])=>`<div class=sp><span class=dim>${new Date(id).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span><b>${f(v)} ${u}</b></div>`).join('')+'</div>'}
-function drawHealth(){const T=trips.filter(t=>t.sum&&t.sum.dur>120).map(t=>({id:t.id,sum:{...t.sum,l100:t.sum.l100==null?null:t.sum.l100/100}})),o=[];
+function drawHealth(){const T=trips.filter(t=>t.sum&&t.sum.dur>120).map(t=>({id:t.id,sum:{...t.sum,l100:t.sum.l100>0?100/t.sum.l100:null}})),o=[];
 if(T.length<3){$('#hl').innerHTML=`<div class=c><h3>Building your baseline</h3><span class=dim>${T.length} of 3 drives of 2+ minutes recorded. After that, each new drive is compared with your usual numbers to flag drift before a fault appears.</span></div>`;return}
 const L=T[T.length-1].sum,B=T.slice(-11,-1).map(t=>t.sum),md=k=>{const a=B.map(s=>s[k]).filter(v=>v!=null).sort((x,y)=>x-y);return a.length>=2?a[a.length>>1]:null};
 const same=md('loadMax')==null||L.loadMax==null||Math.abs(L.loadMax-md('loadMax'))<15;
@@ -204,9 +229,10 @@ const chk=(k,t,dir,pct,msg,needSame)=>{const v=L[k],m=md(k);if(v==null||m==null|
 if(L.cltMax>108)o.push({s:'bad',t:'Engine running hot',m:`Peak coolant ${L.cltMax.toFixed(0)} °C. Check coolant level, fan and thermostat.`});else if(L.cltMax>104)o.push({s:'warn',t:'Coolant running warm',m:`Peak ${L.cltMax.toFixed(0)} °C on the last drive.`});
 if(L.volt!=null&&L.volt<12.8)o.push({s:'bad',t:'Charging system',m:`Average ${L.volt.toFixed(1)} V with engine running. Test battery and alternator.`});else if(L.volt!=null&&L.volt<13.4)o.push({s:'warn',t:'Charging voltage low',m:`Average ${L.volt.toFixed(1)} V with engine running.`});
 if(L.atfMax>125)o.push({s:'bad',t:'Gearbox oil very hot',m:`Peak ${L.atfMax.toFixed(0)} °C. Check the gearbox oil and cooler.`});else if(L.atfMax>110)o.push({s:'warn',t:'Gearbox oil running warm',m:`Peak ${L.atfMax.toFixed(0)} °C on the last drive.`});
+if(L.bErr>.3)o.push({s:'bad',t:'Boost below requested',m:`Averaging ${L.bErr.toFixed(2)} bar short of the boost the engine asks for.`});else if(L.bErr>.15)o.push({s:'warn',t:'Boost below requested',m:`Averaging ${L.bErr.toFixed(2)} bar short of the boost the engine asks for.`});
 chk('boostMax','Boost dropping',-1,12,'Peak boost at similar load',1);chk('mafMax','Air flow dropping',-1,10,'Peak air flow. Possible intake restriction, leak or dirty sensor',1);
 chk('railMax','Rail pressure dropping',-1,10,'Peak rail pressure. Possible fuel supply or pump wear',1);chk('warm','Slow warm-up',1,40,'Time to 80 °C. Possible thermostat stuck open');
-chk('l100','Fuel use rising',1,15,'Fuel use in L/km');chk('egtMax','Exhaust temps rising',1,8,'Peak exhaust temperature');chk('iatMax','Intake temps rising',1,15,'Peak intake air temp. Check intercooler');
+chk('l100','Fuel economy dropping',-1,15,'Fuel economy in km/L');chk('egtMax','Exhaust temps rising',1,8,'Peak exhaust temperature');chk('iatMax','Intake temps rising',1,15,'Peak intake air temp. Check intercooler');
 const miss=M.filter(([k])=>!T.some(t=>t.sum[k]!=null)).map(m=>m[1].toLowerCase());
 $('#hl').innerHTML=(o.length?o.map(x=>{const k=TK[x.t];return`<details class=c><summary><h3 class=${x.s}>${x.t}</h3><span class=dim>${x.m.replace(/\.$/,'')}. Tap for details.</span></summary><p class=dim style="margin-top:10px">${ADV[k]||''}</p>${k?detail(k,T,md(k)):''}</details>`}).join(''):`<div class=c><h3 class=ok>No drift detected</h3><span class=dim>The last drive matches your usual numbers.</span></div>`)+
 M.map(([k,n,u])=>{const a=T.map(t=>t.sum[k]).filter(v=>v!=null);return a.length?`<details class=c><summary><div class=sp><div><h3>${n}</h3><span class=dim>Latest ${a[a.length-1].toFixed(dec(k))} ${u}. Tap for details.</span></div>${spark(a.slice(-12))}</div></summary><p class=dim style="margin-top:10px">${DESC[k]}</p>${detail(k,T,md(k))}</details>`:''}).join('')+
@@ -237,6 +263,6 @@ let ip;addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;$('#bi
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState=='hidden')keep();else if(rec&&navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>gw=w).catch(()=>{})});addEventListener('pagehide',()=>keep());
 $('#ka').checked=localStorage.ka!='0';$('#ka').onchange=()=>localStorage.ka=$('#ka').checked?1:0;
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js');
-const VER='1.8';$('#ver').textContent='v'+VER;
+const VER='2.1';$('#ver').textContent='v'+VER;
 load();if(localStorage.vin)$('#sub').textContent=localStorage.vin+' (last connected)';
 </script></body></html>
