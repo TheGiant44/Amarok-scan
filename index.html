@@ -30,6 +30,7 @@ dialog{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-r
 .kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin:10px 0}.kv b{text-align:right}.lst .sp{padding:4px 0;border-top:1px solid var(--ln)}.c svg.big{height:96px;width:100%}
 input[type=number]{width:96px;background:var(--bg);color:var(--ink);border:1px solid var(--ln);border-radius:8px;padding:8px;font:inherit;text-align:right}
 select{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-radius:10px;padding:10px;font:inherit;min-height:44px}.g.sm .t{padding:6px 8px}.g.sm .t b{font-size:21px}input[type=range]{accent-color:var(--am)}
+#tc{flex:1;min-width:130px;background:var(--bg);color:var(--ink);border:1px solid var(--ln);border-radius:10px;padding:10px;font:inherit;text-transform:uppercase}pre{font:12px/1.4 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;background:var(--bg);border:1px solid var(--ln);border-radius:8px;padding:8px;margin-top:8px;max-height:300px;overflow:auto}pre:empty{display:none}
 </style></head><body>
 <header><h1>Amarok V6 scan <span class=dim id=ver></span><small id=sub>Not connected</small></h1><button class=chip id=cb><i></i><span>Connect</span></button></header>
 <main>
@@ -46,6 +47,10 @@ select{background:var(--pn);color:var(--ink);border:1px solid var(--ln);border-r
 <section id=faults>
 <div class=row><button class=p id=f1>Read codes</button><button id=f2>Scan all modules</button><button class=d id=f3>Clear codes</button></div>
 <div id=fl><p class=dim>Connect an adapter, then read codes. Each scan is saved so new faults can be spotted.</p></div>
+<details class=c style="margin-top:10px"><summary><h3>Sensor test and terminal</h3><span class=dim>See which sensors the car answers, run the key-on engine-off check, or send read-only commands.</span></summary>
+<div class=row style="margin-top:10px"><button id=ts1>Test all sensors</button><button id=ko>Key-on engine-off check</button><button id=tsh>Share log</button></div><div id=kb></div>
+<div class=row><select id=tm><option value=7DF>All modules</option><option value=7E0>Engine (7E0)</option><option value=7E1>Gearbox (7E1)</option></select><input id=tc placeholder="e.g. 010B or 22A008" autocapitalize=characters autocomplete=off><button id=tb>Send</button></div>
+<pre id=tlog></pre></details>
 </section>
 <section id=trips><div class=row><button id=ex>Back up all trips</button></div><div id=tl></div></section>
 <section id=health><div id=hl></div></section>
@@ -78,7 +83,7 @@ const P=[
 {id:'2F',k:'lvl',n:'Fuel level',u:'%',f:a=>a*100/255},
 {k:'atf',n:'Gearbox oil',u:'°C',w:110,x:130},{k:'egt2',n:'Exhaust (VW)',u:'°C',w:700,x:800},{k:'soot',n:'DPF soot load',u:'%',w:80,x:95},
 {k:'boostreq',n:'Boost requested',u:'bar',d:2},{k:'vgt',n:'Turbo vane',u:'%'},{k:'expr',n:'Exhaust pressure',u:'kPa'},{k:'cact',n:'Charge air temp',u:'°C'},{k:'egt1',n:'Exhaust temp 1',u:'°C'},
-{id:'70',k:'p70',h:1,o:d=>{if(d.length<5)return;const c=(d[1]*256+d[2])/32,a=(d[3]*256+d[4])/32,b=V.baro??baroEst();if(V.baro==null&&(V.rpm||0)<100&&a>50&&a<130)V.baro=a;if(a>50&&a<700){V.boost=Math.max(0,(a-b)/100);V.b70=1}if(c>50&&c<700)V.boostreq=Math.max(0,(c-b)/100)}},
+{id:'70',k:'p70',h:1,o:d=>{if(d.length<5)return;const c=(d[1]*256+d[2])/32,a=(d[3]*256+d[4])/32,b=V.baro??baroEst();if(V.baro==null&&(V.rpm||0)<100&&a>50&&a<130)V.baro=a;if(a>50&&a<700){V.babs=a;V.boost=Math.max(0,(a-b)/100);V.b70=1}if(c>50&&c<700)V.boostreq=Math.max(0,(c-b)/100)}},
 {id:'71',k:'p71',h:1,o:d=>{if(d.length>=3&&d[2]<=255)V.vgt=d[2]*100/255}},
 {id:'73',k:'p73',h:1,o:d=>{if(d.length>=3){const x=(d[1]*256+d[2])/10;if(x>0&&x<1000)V.expr=x}}},
 {id:'77',k:'p77',h:1,o:d=>{if(d.length>=2&&d[1]>0&&d[1]<255)V.cact=d[1]-40}},
@@ -119,10 +124,10 @@ const h=hx(await tx(v.c,1500)),pre='62'+v.c.slice(2),i=h.indexOf(pre);if(i<0){v.
 const x=v.f(...(h.slice(i+pre.length).match(/../g)||[]).map(n=>parseInt(n,16)));if(isFinite(x)&&x>=v.lo&&x<=v.hi){V[v.k]=x;v.bad=0}}
 if(hd)await tx('ATSH7DF')}
 async function poll(){
-while(live){if(rc){await sleep(1000);continue}cyc++;
+while(live){if(rc){await sleep(1000);continue}if(hold){await sleep(200);continue}cyc++;
 if(demo){Object.assign(V,sim((Date.now()-T0)/1000));okTs=Date.now();await sleep(250)}
 else{const list=P.filter(p=>p.id&&(sup.has(p.id)||(TRY.has(p.id)&&cyc%15==1)));
-for(const p of list){if(!live||rc)break;const k=p.id,h=hx(await tx('01'+k,2500)),i=h.indexOf('41'+k);if(i<0)continue;{const d=(h.slice(i+4).match(/../g)||[]).map(x=>parseInt(x,16));p.o?p.o(d):V[p.k]=p.f(...d)}sup.add(k);okTs=Date.now()}
+for(const p of list){if(!live||rc||hold)break;const k=p.id,h=hx(await tx('01'+k,2500)),i=h.indexOf('41'+k);if(i<0)continue;{const d=(h.slice(i+4).match(/../g)||[]).map(x=>parseInt(x,16));p.o?p.o(d):V[p.k]=p.f(...d)}sup.add(k);okTs=Date.now()}
 if(cyc%5==0&&!rc)await vwRead();
 if(Date.now()-okTs>3000)await sleep(500)}
 if(V.map!=null&&V.baro==null&&(V.rpm||0)<100)V.baro=V.map;
@@ -146,7 +151,7 @@ const db=new Promise(r=>{const q=indexedDB.open('amarok',1);q.onupgradeneeded=()
 const idb=(m,f)=>db.then(d=>new Promise(r=>{const q=f(d.transaction('trips',m).objectStore('trips'));q.onsuccess=()=>r(q.result)}));
 const put=t=>idb('readwrite',s=>s.put(t)),del=id=>idb('readwrite',s=>s.delete(id));
 async function load(){trips=(await idb('readonly',s=>s.getAll())).sort((a,b)=>a.id-b.id);drawTrips();drawHealth()}
-let rc=0,lastS=0,okTs=0,au;
+let rc=0,hold=0,lastS=0,okTs=0,au;
 const keep=()=>rec&&rec.s.length&&put({...rec,sum:summ(rec.s)});
 function sample(){if(!rec||V.rpm==null||Date.now()-okTs>3000||Date.now()-lastS<1000)return;
 const n=Date.now();if(rec.s.length&&(n-rec.id)/1000-rec.s[rec.s.length-1][0]>300){const r=rec;r.sum=summ(r.s);put(r).then(load);rec={id:n,s:[]}}
@@ -172,7 +177,11 @@ w=S.find(r=>r[1+KEYS.indexOf('clt')]>=80),c0=S[0][1+KEYS.indexOf('clt')];
 const bErr=()=>{const be=S.map(r=>{const a=r[1+KEYS.indexOf('boost')],q=r[KEYS.length+6];return q!=null&&a!=null&&q>=.3?q-a:null}).filter(v=>v!=null);return be.length>5?be.reduce((x,y)=>x+y)/be.length:null};const ex=j=>{const a=S.map(r=>r[KEYS.length+3+j]).filter(v=>v!=null);return a.length?Math.max(...a):null};
 return{dur:S[S.length-1][0],dist,atfMax:ex(0),sootMax:ex(2),bErr:bErr(),cltMax:mx('clt'),boostMax:mx('boost'),mafMax:mx('maf'),railMax:mx('rail'),egtMax:mx('egt'),loadMax:mx('load'),iatMax:mx('iat'),
 volt:run.length>5?run.reduce((a,b)=>a+b)/run.length:null,warm:c0<60&&w?w[0]:null,l100:fuel>0&&dist>3?fuel/dist*100:null}}
-function csv(t){const a=['t,'+KEYS.join(',')+',lat,lon,'+KEYS2.join(','),...t.s.map(r=>r.join(','))];dl(a.join('\n'),'amarok-'+new Date(t.id).toISOString().slice(0,16).replace(/[:T]/g,'-')+'.csv','text/csv')}
+const csvName=t=>'amarok-'+new Date(t.id).toISOString().slice(0,16).replace(/[:T]/g,'-')+'.csv',csvText=t=>['t,'+KEYS.join(',')+',lat,lon,'+KEYS2.join(','),...t.s.map(r=>r.join(','))].join('\n');
+function csv(t){dl(csvText(t),csvName(t),'text/csv')}
+async function shareTrip(id){const t=trips.find(x=>x.id==id),f=new File([csvText(t)],csvName(t),{type:'text/csv'}),sm=t.sum||{};
+if(navigator.canShare&&navigator.canShare({files:[f]}))try{await navigator.share({files:[f],title:'Amarok V6 trip',text:'Amarok V6 trip recording from '+new Date(t.id).toLocaleString()+', '+Math.round((sm.dur||0)/60)+' min, '+(sm.dist||0).toFixed(1)+' km (app '+VER+'). Please check it for problems.'});return}catch(e){if(e.name=='AbortError')return}
+csv(t);toast('Sharing is not available here. The CSV was saved to your downloads. Attach it in Claude.')}
 function dl(txt,n,ty){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:ty}));a.download=n;a.click()}
 const ci=KEYS.length+1,gp=t=>t.s.filter(r=>r[ci]!=null&&r[ci+1]!=null).map(r=>[r[ci],r[ci+1]]),
 osm=p=>`https://www.openstreetmap.org/?mlat=${p[0]}&mlon=${p[1]}#map=16/${p[0]}/${p[1]}`;
@@ -180,7 +189,7 @@ function drawTrips(){$('#tl').innerHTML=trips.length?[...trips].reverse().map(t=
 return`<details class=c ontoggle="this.open&&openMap(${t.id})"><summary><h3>${new Date(t.id).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})}</h3><span class=dim>${Math.round(s.dur/60)} min, ${(s.dist||0).toFixed(1)} km, peak coolant ${s.cltMax?.toFixed(0)??'–'} °C, peak boost ${s.boostMax?.toFixed(2)??'–'} bar. Tap to open map.</span></summary>
 <div class=dim style="margin-top:10px;line-height:1.7">${a?`Start: <a href="${osm(a)}" target=_blank>${a[0]}, ${a[1]}</a><br>End: <a href="${osm(b)}" target=_blank>${b[0]}, ${b[1]}</a><br>${g.length} GPS points`:'No GPS position was recorded for this trip. Allow location access for the app.'}</div>
 ${a?`<div class=dim style="margin-top:8px">Tap the route to see the readings at that point, or press Play to replay the drive.</div><div class=mp id=m${t.id}></div><div id=rp${t.id}><div class=row style="margin:10px 0 0"><button class=p id=pl${t.id}>Play</button><select id=sp${t.id}><option value=1>1×</option><option value=5 selected>5×</option><option value=10>10×</option><option value=30>30×</option></select><label class=dim><input type=checkbox id=fo${t.id} checked> Follow</label><button id=wh${t.id}>Whole route</button><span class=n id=cl${t.id} style="margin-left:auto"></span></div><input type=range id=sc${t.id} step=any style="width:100%;margin:8px 0"><div class="g sm" id=rd${t.id}></div></div>`:''}
-<div class=row style="margin:8px 0 0"><button onclick="csv(trips.find(x=>x.id==${t.id}))">Export CSV</button><button class=d onclick="if(confirm('Delete this trip?'))del(${t.id}).then(load)">Delete</button></div></details>`}).join(''):'<p class=dim>No trips yet. Recording starts automatically when the adapter connects.</p>'}
+<div class=row style="margin:8px 0 0"><button class=p onclick="shareTrip(${t.id})">Share with Claude</button><button onclick="csv(trips.find(x=>x.id==${t.id}))">Export CSV</button><button class=d onclick="if(confirm('Delete this trip?'))del(${t.id}).then(load)">Delete</button></div></details>`}).join(''):'<p class=dim>No trips yet. Recording starts automatically when the adapter connects.</p>'}
 let LL;const leaf=()=>LL||(LL=new Promise((ok,no)=>{const l=document.createElement('link');l.rel='stylesheet';l.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.append(l);const j=document.createElement('script');j.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';j.onload=()=>ok(window.L);j.onerror=()=>{LL=null;no()};document.head.append(j)}));
 const info=(t,r)=>{const tm=new Date(t.id+r[0]*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 return`<div style="font:13px/1.45 system-ui"><b>${tm}</b>, ${Math.floor(r[0]/60)}:${String(r[0]%60).padStart(2,'0')} into trip<br>${r[ci]}, ${r[ci+1]}<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:6px">`+KEYS.concat(KEYS2).map((k,i)=>{const v=i<KEYS.length?r[1+i]:r[ci+2+i-KEYS.length],p=P.find(x=>x.k==k);return v==null?'':`<div>${p.n}<br><b>${(+v).toFixed(p.d||0)}</b> ${p.u}</div>`}).join('')+'</div></div>'};
@@ -254,8 +263,36 @@ $('#fl').innerHTML=h||'<p class=dim>No modules answered. This adapter or car may
 async function clearAll(){if(!live)return toast('Connect an adapter or start the demo first.');if(!confirm('Clear fault codes? Active faults will return. Freeze-frame data and readiness status are also erased.'))return;
 if(!demo){await tx('04');for(const[q,r]of window.found||[]){await tx('ATSH'+q);await tx('ATCRA'+r);await tx('14FFFFFF',1500)}await tx('ATAR');await tx('ATSH7DF')}
 toast('Clear command sent. Read codes again to confirm.')}
+/* ---- sensor test, terminal, key-on engine-off ---- */
+const tlog=m=>{const e=$('#tlog');e.textContent=(e.textContent+m+'\n').split('\n').slice(-90).join('\n');e.scrollTop=e.scrollHeight};
+const RO=/^(AT(RV|DP|DPN|I)|03|(01|02|07|09|0A)[0-9A-F]{0,16}|(22|19)[0-9A-F]{2,12})$/;
+const withHold=async f=>{if(!live)return toast('Connect an adapter first.');hold=1;await sleep(600);try{await f()}finally{hold=0}};
+async function term(){const c=$('#tc').value.trim().toUpperCase().replace(/\s/g,'');if(!c)return;
+if(!RO.test(c))return tlog('> '+c+'\n  Blocked. This terminal only sends read requests.');
+const h=$('#tm').value;tlog('> '+c+'  ['+h+']');if(demo)return tlog('  Demo mode: no adapter connected.');
+if(h!='7DF')await tx('ATSH'+h);const r=await tx(c,4000);if(h!='7DF')await tx('ATSH7DF');tlog('  '+(r.replace(/[\r\n]+/g,' ').trim()||'(no answer)'))}
+async function testSens(){if(demo)return tlog('Demo mode: no adapter connected.');tlog('--- Sensor test ---');
+for(const p of P.filter(x=>x.id)){const r=hx(await tx('01'+p.id,2500)),i=r.indexOf('41'+p.id);tlog(p.id+' '+(p.n||p.k).padEnd(16)+(i<0?' no answer':' answers: '+r.slice(i+4)))}
+for(const v of VW){await tx('ATSH'+v.h);const r=hx(await tx(v.c,1500)),pre='62'+v.c.slice(2),i=r.indexOf(pre);tlog(v.c+' '+P.find(x=>x.k==v.k).n.padEnd(16)+' '+v.h+(i<0?' no answer':' answers: '+r.slice(i+pre.length)))}
+await tx('ATSH7DF');tlog('Done.')}
+async function koeo(){if(!live)return toast('Connect an adapter or start the demo first.');
+const vb=parseFloat(demo?'12.6V':await tx('ATRV',2000))||V.volt,R=[],add=(n,v,s,sp)=>R.push([n,v,s,sp]),sp=a=>Math.max(...a)-Math.min(...a);
+(V.rpm||0)>50?add('Engine off','Engine running at '+Math.round(V.rpm)+' rpm','bad','Turn the ignition on without starting the engine, then run this again'):add('Engine off','0 rpm','ok','');
+if(vb)add('Battery voltage',vb.toFixed(1)+' V',vb>=12.2?'ok':vb>=11.6?'warn':'bad','12.2 V or more with the engine off');
+const ap=[['Ambient',V.baro],['Manifold',V.map],['Boost sensor',V.babs]].filter(x=>x[1]!=null);
+if(ap.length>=2){const d=sp(ap.map(x=>x[1]));add('Pressure sensors agree',ap.map(x=>x[0]+' '+x[1].toFixed(0)).join(', ')+' kPa',d<=2?'ok':d<=4?'warn':'bad','Within 2 kPa (20 hPa) of each other')}else add('Pressure sensors agree','Fewer than two of ambient, manifold and boost sensor answered','warn','');
+if(V.expr!=null&&V.baro!=null){const d=Math.abs(V.expr-V.baro);add('Exhaust pressure at rest',V.expr.toFixed(0)+' kPa',d<=3?'ok':d<=6?'warn':'bad','Within 3 kPa of ambient')}
+if(V.maf!=null)add('Air flow at rest',V.maf.toFixed(1)+' g/s',V.maf<3?'ok':'warn','Close to zero with the engine off');
+const tp=[['Coolant',V.clt],['Intake',V.iat],['Oil',V.oil],['Gearbox',V.atf]].filter(x=>x[1]!=null);
+if(tp.length>=2){const d=sp(tp.map(x=>x[1]));add('Temperatures agree',tp.map(x=>x[0]+' '+x[1].toFixed(0)).join(', ')+' °C',d<=6?'ok':d<=12?'warn':'bad','Within 6 °C, only valid after the engine has been off for a few hours')}
+if(V.vgt!=null)add('Turbo vane position',V.vgt.toFixed(0)+' %','ok','Reading only. Note the normal cold value for your truck');
+tlog('--- Key-on engine-off check ---');R.forEach(([n,v,s,p])=>tlog(s.toUpperCase().padEnd(5)+n+': '+v));
+$('#kb').innerHTML=R.map(([n,v,s,p])=>`<div class=c style="margin-top:8px"><h3 class=${s}>${n}</h3><span class=dim>${v}${p?'. '+p:''}</span></div>`).join('')}
 /* ---- wiring ---- */
-$('#f1').onclick=readCodes;$('#f2').onclick=scanAll;$('#f3').onclick=clearAll;$('#rb').onclick=()=>rec?recStop():recStart();
+$('#tsh').onclick=async()=>{const x=$('#tlog').textContent.trim();if(!x)return toast('Run a test first.');const t='Amarok V6 scanner log (app '+VER+')\n'+x;
+if(navigator.share)try{await navigator.share({title:'Amarok scanner log',text:t});return}catch(e){if(e.name=='AbortError')return}
+try{await navigator.clipboard.writeText(t);toast('Log copied. Paste it into Claude.')}catch(e){toast('Could not share or copy the log.')}};
+$('#f1').onclick=readCodes;$('#ts1').onclick=()=>withHold(testSens);$('#ko').onclick=koeo;$('#tb').onclick=()=>withHold(term);$('#tc').onkeydown=e=>{if(e.key=='Enter')$('#tb').click()};$('#f2').onclick=scanAll;$('#f3').onclick=clearAll;$('#rb').onclick=()=>rec?recStop():recStart();
 $('#cb').onclick=()=>live?(confirm('Disconnect?')&&stopAll()):$('#cd').showModal();$('#bx').onclick=()=>$('#cd').close();$('#bc').onclick=connectBle;
 $('#bd').onclick=()=>{$('#cd').close();demo=true;sup=new Set(P.filter(p=>p.id).map(p=>p.id));begin('Demo')};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,section').forEach(e=>e.classList.remove('on'));b.classList.add('on');$('#'+b.dataset.t).classList.add('on')});
@@ -263,6 +300,6 @@ let ip;addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;$('#bi
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState=='hidden')keep();else if(rec&&navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>gw=w).catch(()=>{})});addEventListener('pagehide',()=>keep());
 $('#ka').checked=localStorage.ka!='0';$('#ka').onchange=()=>localStorage.ka=$('#ka').checked?1:0;
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js');
-const VER='2.1';$('#ver').textContent='v'+VER;
+const VER='2.3';$('#ver').textContent='v'+VER;
 load();if(localStorage.vin)$('#sub').textContent=localStorage.vin+' (last connected)';
 </script></body></html>
